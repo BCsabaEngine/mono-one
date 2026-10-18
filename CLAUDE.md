@@ -31,7 +31,7 @@ core services ──> Postgres (one database each)        web ──> Redis (JWT
 | `order-service`    | 3002 | `orders.place`                                                             | calls `customers.get` (forwarding the JWT), stores the order, publishes `order.placed` |
 | `document-service` | 3003 | `documents.get`                                                            | the document is created by the `order.placed` event                                    |
 
-Directions: `web` -> all three, `order-service` -> `customer-service`. Demo data: `customer-service` migration `0001_seed_demo_customer` (remove before real use). The web `/auth/dev-login` route (behind `ENABLE_DEV_LOGIN`) mints an unsigned demo JWT; replace it with the real login flow and keep the flag off in production.
+Directions: `web` -> all three, `order-service` -> `customer-service`. Demo data: `pnpm nx seed <svc>` (customer-service, order-service; see Data rules). The web `/auth/dev-login` route (behind `ENABLE_DEV_LOGIN`) mints an unsigned demo JWT; replace it with the real login flow and keep the flag off in production.
 
 ## Stack
 
@@ -68,13 +68,13 @@ Pinned exactly (`save-exact`, committed `pnpm-lock.yaml`, `.nvmrc`, Docker tags)
 apps/web  apps/customer-service  apps/order-service  apps/document-service
 libs/
   customer-api  order-api  document-api                  contract.ts (Zod schemas, DTOs, service "port" interfaces) + server.ts (tRPC router, AppRouter type)
-  config.ts logging.ts errors.ts db.ts testing.ts  trpc/ migrations/   shared helpers, imported as @lib/<name>; not an Nx project
+  config.ts logging.ts errors.ts db.ts seedIds.ts seeding.ts testing.ts  trpc/ migrations/   shared helpers, imported as @lib/<name>; not an Nx project
   events/   one Nx project, imported as @events/<file>: contract.ts (defineEvent, envelope, ServiceId, EventsRouter) registry.ts (EVENTS map) client.ts (publisher, events router) + one file per owning service (order.ts)
 ```
 
 - Libs are source-consumed (not buildable); path mappings live in `tsconfig.base.json`; `apps/web/tsconfig.json` repeats them (relative to itself) because it extends `$app/tsconfig`, not the base, so a new alias goes into both files. No `baseUrl` (deprecated in TS 6); entries start with `./`.
 - `*-api` libs hold the contract (`contract.ts`) and the router (`server.ts`) and have one entry point, `@api/<svc>` (`@api/*` maps to `libs/*-api/src/index.ts`; contract re-exports, `AppRouter` type, plus `appRouter` and the context type, which ESLint restricts to the owning service app). The router never imports from an app, so the Nx graph stays acyclic.
-- Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, request-ID child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `testing` (Testcontainers helpers, tests only).
+- Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, request-ID child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `seedIds` (shared seed-id scale 1..100 per entity), `seeding` (seeder bootstrap), `testing` (Testcontainers helpers, tests only).
 
 ### Boundaries (root `eslint.config.mjs`)
 
@@ -87,7 +87,7 @@ libs/
 
 ```
 apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + server, shared with tests)
-  config.ts  container.ts  migrate.ts  trpc/context.ts  services/  events/  db/{schema,migrations,drizzle.config.ts}
+  config.ts  container.ts  migrate.ts  seed.ts (core services with demo data)  trpc/context.ts  services/  events/  db/{schema,seed.ts,migrations,drizzle.config.ts}
 ```
 
 - Business logic in `services/` implements the ports from `<svc>-api` (`contract.ts`, imported type-only); routers (in `<svc>-api`) validate input with the contract schemas and delegate through `ctx.services`.
@@ -101,7 +101,8 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 - Each service owns its database (separate `DATABASE_URL`, optional `DB_SCHEMA`); no service reads another's tables and there are no cross-service foreign keys. Cross-service data goes through tRPC. One pg pool per service with a deliberate size.
 - Each service keeps its Drizzle schema, migrations and one-line `drizzle.config.ts` in its own app. `drizzle.config.ts` imports `defineDrizzleConfig` by relative path because drizzle-kit ignores tsconfig paths.
-- Migrations run as a separate step (`pnpm nx run <svc>:migrate` (not `nx migrate`, that is Nx's built-in upgrade command), or `node migrate.mjs` in the image), under a Postgres advisory lock. Change the schema, then `pnpm nx db-generate <svc>` and commit the SQL.
+- Migrations run as a separate step (`pnpm nx run <svc>:migrate` (not `nx migrate`, that is Nx's built-in upgrade command), or `node migrate.mjs` in the image), under a Postgres advisory lock; the `__drizzle_migrations` table lives in the same schema as the tables (`DB_SCHEMA`, default `public`), not in drizzle's own `drizzle` schema. Change the schema, then `pnpm nx db-generate <svc>` and commit the SQL.
+- **Seed data is code, never a migration.** `pnpm seed` / `pnpm nx seed <svc>` (tsx, not bundled into the images) wipes the service's tables and re-inserts deterministic demo rows; it refuses `NODE_ENV=production`. All seed ids come from `libs/seedIds.ts` (`seedId(entity, n)` / `seedIds(entity)`, n = 1..100, one UUID namespace per entity), so services reference each other's seed rows (an order's `customerId`) without reading each other's databases. New entity: add its prefix there; new seeded service: `src/db/seed.ts` (`seed(db)`) + `src/seed.ts` (`seedService`) + a `seed` target.
 
 ## Events (no bus, no persistence, no retry)
 
@@ -141,9 +142,10 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 ```bash
 corepack enable && pnpm install
-pnpm dev:infra          # postgres + redis in Docker
+pnpm dev:infra          # postgres + redis only (docker-compose.dev.yml); the full stack is docker-compose.yml
 pnpm env:init           # creates missing apps/*/.env from .env.example (first run only)
 pnpm migrate            # nx run-many -t migrate --parallel=4 (run after dev:infra and after pulling schema changes)
+pnpm seed               # nx run-many -t seed: wipes customer + order data and inserts demo rows (ids from libs/seedIds.ts); dev only
 pnpm dev                # nx run-many -t serve: web + services with reload, prefixed output (no migrations)
 pnpm all                # format + lint (both write/--fix) + typecheck + build (no tests); use format:check/lint:check for a read-only run
 pnpm lint               # eslint --fix on all projects + the @lib helpers (not an Nx project)

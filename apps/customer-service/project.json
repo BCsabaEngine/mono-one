@@ -21,6 +21,12 @@
         "command": "tsx --tsconfig apps/customer-service/tsconfig.json --env-file-if-exists=apps/customer-service/.env apps/customer-service/src/migrate.ts"
       }
     },
+    "seed": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig apps/customer-service/tsconfig.json --env-file-if-exists=apps/customer-service/.env apps/customer-service/src/seed.ts"
+      }
+    },
     "db-generate": {
       "executor": "nx:run-commands",
       "options": {

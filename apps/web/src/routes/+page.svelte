@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
+	import { DEMO_CUSTOMER_ID } from '#lib/demo.ts'
 	import { trpc } from '#lib/trpc.ts'
-
-	const DEMO_CUSTOMER_ID = '00000000-0000-4000-8000-000000000001' // seeded by customer-service migration 0001
 
 	let log = $state<string[]>([])
 	const show = (label: string, value: unknown) => (log = [`${label}: ${JSON.stringify(value)}`, ...log])

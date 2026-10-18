@@ -9,8 +9,9 @@
   "scripts": {
     "dev": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream",
     "env:init": "for f in apps/*/.env.example; do [ -e \"${f%.example}\" ] || cp \"$f\" \"${f%.example}\"; done",
-    "dev:infra": "docker compose up -d postgres redis",
+    "dev:infra": "docker compose -f docker-compose.dev.yml up -d --wait",
     "migrate": "nx run-many -t migrate --parallel=4 --output-style=static",
+    "seed": "nx run-many -t seed --parallel=4 --output-style=static",
     "graph": "nx graph",
     "lint": "nx run-many -t lint -- --fix && eslint --fix libs/*.ts libs/trpc libs/migrations",
     "lint:check": "nx run-many -t lint && eslint libs/*.ts libs/trpc libs/migrations",

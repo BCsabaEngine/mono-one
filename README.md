@@ -20,9 +20,10 @@ Open http://localhost:3000, press "Dev login", then call the endpoints. Only `we
 ## Develop locally without Docker for the apps
 
 ```bash
-pnpm dev:infra   # postgres + redis in Docker
+pnpm dev:infra   # postgres + redis in Docker (docker-compose.dev.yml)
 pnpm env:init    # creates missing .env files from .env.example (first run only)
 pnpm migrate     # applies the migrations of all services
+pnpm seed        # optional: wipes customer + order data and inserts demo data (ids from libs/seedIds.ts)
 pnpm dev         # serves web + the 3 services with reload
 ```
 
@@ -39,4 +40,4 @@ Services restart on source changes (`tsx watch`, libs included); `web` uses Vite
 
 ## Targets
 
-`lint`, `typecheck`, `test` (Testcontainers needs Docker), `build`, `docker-build`; services also `serve`, `migrate`, `db-generate` (after a schema change).
+`lint`, `typecheck`, `test` (Testcontainers needs Docker), `build`, `docker-build`; services also `serve`, `migrate`, `seed` (customer, order), `db-generate` (after a schema change).
