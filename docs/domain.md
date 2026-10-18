@@ -4,7 +4,7 @@ The product is split into three business domains. Each is owned by one service a
 
 | Domain    | Owns                                    | Example capability                             |
 | --------- | --------------------------------------- | ---------------------------------------------- |
-| Customers | customer records (name, email)          | look up a customer                             |
+| Customers | customers with addresses and contacts   | look up a customer                             |
 | Orders    | orders and their status                 | place an order for a customer                  |
 | Documents | documents generated for business events | retrieve the confirmation document of an order |
 

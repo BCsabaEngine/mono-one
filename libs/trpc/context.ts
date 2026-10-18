@@ -22,6 +22,7 @@ export const decodeJwt = (jwt: string): Identity | undefined => {
     const payload = JSON.parse(
       Buffer.from(jwt.split('.')[1] ?? '', 'base64url').toString()
     )
+
     return identitySchema.parse(payload)
   } catch {
     return undefined
@@ -71,6 +72,7 @@ export const baseContextFromHeaders = (
 ): BaseContext => {
   const incoming = header(headers, TRACE_ID_HEADER)
   const traceId = incoming && TRACE_ID.test(incoming) ? incoming : randomUUID()
+
   const callChain = [
     ...(header(headers, CALL_CHAIN_HEADER)
       ?.split(',')
@@ -78,10 +80,12 @@ export const baseContextFromHeaders = (
       .filter(s => CHAIN_ENTRY.test(s)) ?? []),
     selfServiceId
   ].slice(-MAX_CHAIN)
+
   const jwt =
     jwtOverride ?? header(headers, 'authorization')?.replace(/^Bearer\s+/i, '')
   const identity = jwt ? decodeJwt(jwt) : undefined
   const serviceId = header(headers, SERVICE_ID_HEADER)
+
   return {
     log: withTrace(log, { traceId, callChain, userId: identity?.sub }),
     traceId,
@@ -104,8 +108,10 @@ export const requirePermission = (
   permission: string
 ): Identity => {
   const identity = requireIdentity(ctx)
+
   if (!identity.permissions.includes(permission))
     throw forbidden(`Missing permission ${permission}`)
+
   return identity
 }
 

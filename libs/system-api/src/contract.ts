@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { PERMISSIONS } from './permissions'
 
 export { PERMISSIONS }
+
 export const permissionSchema = z.enum(PERMISSIONS)
 export type Permission = z.infer<typeof permissionSchema>
 
@@ -26,6 +27,7 @@ export const authUserInput = z.object({
   password: z.string().min(1)
 })
 export type AuthUserInput = z.infer<typeof authUserInput>
+
 export const addUserInput = z.object({
   email: z.email(),
   name: z.string().min(1),
@@ -33,6 +35,7 @@ export const addUserInput = z.object({
   permissions: z.array(permissionSchema).default([])
 })
 export type AddUserInput = z.infer<typeof addUserInput>
+
 export const updateUserInput = z.object({
   id,
   name: z.string().min(1).optional(),
@@ -40,6 +43,7 @@ export const updateUserInput = z.object({
   password: z.string().min(1).optional()
 })
 export type UpdateUserInput = z.infer<typeof updateUserInput>
+
 export const deleteUserInput = z.object({ id })
 
 /** Port implemented by apps/system-service, consumed by the router in system-api. */

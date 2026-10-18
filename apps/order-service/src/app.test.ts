@@ -1,6 +1,6 @@
 import { pushSchema } from 'drizzle-kit/api'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { SEED_SCALE, seedId, seedIds } from '@lib/seedIds'
+import { SEED_SCALE, seedIds } from '@lib/seedIds'
 import {
   listen,
   silentLogger,
@@ -18,16 +18,24 @@ import * as schema from './db/schema'
 import { seed } from './db/seed'
 
 const customer = {
-  id: crypto.randomUUID(),
+  id: 7,
+  code: 'C-0007',
   name: 'Test Customer',
-  email: 'test@example.com',
-  createdAt: new Date().toISOString()
+  comment: null,
+  addresses: [],
+  contacts: [],
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  deletedAt: null as string | null
 }
+
 const published: unknown[][] = []
+
 // customer-service is faked at the client boundary; the real call is covered by its own contract/tests
 const customerClient = {
   customers: { get: { query: async () => customer } }
 } as unknown as Dependencies['customerClient']
+
 const publisher = {
   publish: async (...args: unknown[]) => (
     published.push(args),
@@ -48,16 +56,19 @@ describe('order-service (real Postgres)', () => {
       silentLogger,
       { customerClient, publisher }
     )
+
     // no committed migrations during development (CLAUDE.md): create the tables from the schema, like `drizzle-kit push`
     await (
       await pushSchema(schema, app.container.cradle.database.db as never)
     ).apply()
+
     client = createServiceClient<AppRouter>({
       url: `${await listen(app.server)}/trpc`,
       serviceId: 'test',
       timeoutMs: 5000
     })
   })
+
   afterAll(async () => {
     app.server.close()
     await app.container.dispose()
@@ -70,6 +81,7 @@ describe('order-service (real Postgres)', () => {
       traceId: 'trace-abcdef',
       callChain: ['web']
     } satisfies CallContext
+
     const order = await client.orders.place.mutate(
       { customerId: customer.id, totalCents: 1990 },
       { context }
@@ -96,6 +108,7 @@ describe('order-service (real Postgres)', () => {
   it('generates a trace id when the caller sends none or a malformed one', async () => {
     published.length = 0
     const jwt = unsignedJwt({ sub: 'user-1' })
+
     await client.orders.place.mutate(
       { customerId: customer.id, totalCents: 5 },
       { context: { jwt, traceId: 'x y!' } satisfies CallContext }
@@ -104,6 +117,7 @@ describe('order-service (real Postgres)', () => {
       { customerId: customer.id, totalCents: 5 },
       { context: { jwt } }
     )
+
     expect(published.map(([, , opts]) => opts)).toEqual([
       {
         traceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
@@ -121,13 +135,15 @@ describe('order-service (real Postgres)', () => {
   it('seeds one order per id of the shared scale, each for the customer with the same index', async () => {
     const { db } = app.container.cradle.database
     await seed(db)
+
     const rows = await db
       .select({ id: orders.id, customerId: orders.customerId })
       .from(orders)
     const byId = new Map(rows.map(r => [r.id, r.customerId]))
+
     expect(rows.map(r => r.id).sort()).toEqual(seedIds('order'))
     seedIds('order').forEach((id, i) =>
-      expect(byId.get(id)).toBe(seedId('customer', SEED_SCALE.min + i))
+      expect(byId.get(id)).toBe(SEED_SCALE.min + i)
     )
   })
 
@@ -137,5 +153,20 @@ describe('order-service (real Postgres)', () => {
     ).rejects.toMatchObject({
       data: { code: 'UNAUTHORIZED' }
     })
+  })
+
+  it('treats a soft-deleted customer as not found', async () => {
+    customer.deletedAt = new Date().toISOString()
+
+    try {
+      await expect(
+        client.orders.place.mutate(
+          { customerId: customer.id, totalCents: 1 },
+          { context: { jwt: unsignedJwt({ sub: 'user-1' }) } }
+        )
+      ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } })
+    } finally {
+      customer.deletedAt = null
+    }
   })
 })

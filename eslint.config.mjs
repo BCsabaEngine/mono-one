@@ -41,12 +41,14 @@ const serviceApps = {
   document: 'document-service',
   system: 'system-service'
 }
+
 const contextNames = {
   customer: 'CustomerContext',
   order: 'OrderContext',
   document: 'DocumentContext',
   system: 'SystemContext'
 }
+
 const serverOnlyRule = libs => [
   'error',
   {

@@ -11,11 +11,13 @@ import { createEventsRouter, createPublisher } from './client'
 import type { ServiceUrls } from './client'
 
 const log = pino({ level: 'silent' })
+
 const payload = {
   orderId: crypto.randomUUID(),
-  customerId: crypto.randomUUID(),
+  customerId: 1,
   totalCents: 1200
 }
+
 const servers: Server[] = []
 
 const subscriber = async (
@@ -23,15 +25,18 @@ const subscriber = async (
   onEvent: (e: { type: string }, ctx: BaseContext) => void | Promise<void>
 ) => {
   const router = createEventsRouter(serviceId, { 'order.placed': onEvent })
+
   const handler = createHTTPHandler({
     basePath: '/events/',
     router,
     createContext: ({ req }) =>
       baseContextFromHeaders(req.headers, log, serviceId)
   })
+
   const server = createServer(handler)
   servers.push(server)
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 }
 
@@ -42,6 +47,7 @@ const urls = (docs: string, web: string): ServiceUrls => ({
   'order-service': 'http://127.0.0.1:1',
   'system-service': 'http://127.0.0.1:1'
 })
+
 const publisher = (u: ServiceUrls, timeoutMs = 1000) =>
   createPublisher({ serviceId: 'order-service', urls: u, log, timeoutMs })
 
@@ -50,6 +56,7 @@ afterEach(() => void servers.splice(0).forEach(s => s.close()))
 describe('events-client', () => {
   it('delivers a typed event to every subscriber in parallel and reports the results', async () => {
     const got: string[] = []
+
     const docs = await subscriber(
       'document-service',
       async () => (
@@ -58,11 +65,13 @@ describe('events-client', () => {
       )
     )
     const web = await subscriber('web', () => void got.push('web'))
+
     const started = Date.now()
     const result = await publisher(urls(docs, web)).publish(
       'order.placed',
       payload
     )
+
     expect(result.delivered.sort()).toEqual(['document-service', 'web'])
     expect(result.failed).toEqual([])
     expect(got.sort()).toEqual(['docs', 'web'])
@@ -73,11 +82,13 @@ describe('events-client', () => {
     const seen: Pick<BaseContext, 'traceId' | 'callChain' | 'userId'>[] = []
     const web = await subscriber('web', (_, ctx) => void seen.push(ctx))
     const docs = await subscriber('document-service', () => undefined)
+
     await publisher(urls(docs, web)).publish('order.placed', payload, {
       traceId: 'trace-abcdef',
       callChain: ['web', 'order-service'],
       userId: 'user-1'
     })
+
     expect(seen).toMatchObject([
       {
         traceId: 'trace-abcdef',
@@ -89,9 +100,11 @@ describe('events-client', () => {
 
   it('one failing subscriber does not affect the others, and the failure is counted', async () => {
     const received: string[] = []
+
     const web = await subscriber('web', e => void received.push(e.type))
     const pub = publisher(urls('http://127.0.0.1:1', web)) // document-service is down
     const result = await pub.publish('order.placed', payload)
+
     expect(result.delivered).toEqual(['web'])
     expect(result.failed).toMatchObject([{ subscriber: 'document-service' }])
     expect(received).toEqual(['order.placed'])
@@ -106,11 +119,13 @@ describe('events-client', () => {
       () => new Promise(r => setTimeout(r, 1500))
     )
     const web = await subscriber('web', () => undefined)
+
     const started = Date.now()
     const result = await publisher(urls(docs, web), 200).publish(
       'order.placed',
       payload
     )
+
     expect(result.delivered).toEqual(['web'])
     expect(result.failed.map(f => f.subscriber)).toEqual(['document-service'])
     expect(Date.now() - started).toBeLessThan(1000)
@@ -118,6 +133,7 @@ describe('events-client', () => {
 
   it('validates the payload against the owner schema before sending', async () => {
     const docs = await subscriber('document-service', () => undefined)
+
     await expect(
       publisher(urls(docs, docs)).publish('order.placed', {
         ...payload,
@@ -134,18 +150,21 @@ describe('events-client', () => {
       log,
       timeoutMs: 100
     })
+
     // @ts-expect-error order.placed is owned by order-service
     void notOwner.publish('order.placed', payload).catch(() => undefined)
   })
 
   it('events.deliver rejects a sender that is not the owner', async () => {
     const docs = await subscriber('document-service', () => undefined)
+
     const client = (serviceId: ServiceId) =>
       createServiceClient<EventsRouter>({
         url: `${docs}/events`,
         serviceId,
         timeoutMs: 1000
       })
+
     const event = {
       id: crypto.randomUUID(),
       type: 'order.placed',
@@ -154,6 +173,7 @@ describe('events-client', () => {
       traceId: 'trace-0001',
       payload
     }
+
     await expect(
       client('customer-service').events.deliver.mutate(event)
     ).rejects.toMatchObject({
@@ -166,11 +186,13 @@ describe('events-client', () => {
 
   it('events.deliver rejects an event that fails the owner schema', async () => {
     const docs = await subscriber('document-service', () => undefined)
+
     const client = createServiceClient<EventsRouter>({
       url: `${docs}/events`,
       serviceId: 'order-service',
       timeoutMs: 1000
     })
+
     const bad = {
       id: crypto.randomUUID(),
       type: 'order.placed',
@@ -179,6 +201,7 @@ describe('events-client', () => {
       traceId: 'trace-0001',
       payload: { orderId: 'nope' }
     }
+
     await expect(client.events.deliver.mutate(bad)).rejects.toMatchObject({
       data: { code: 'BAD_REQUEST' }
     })

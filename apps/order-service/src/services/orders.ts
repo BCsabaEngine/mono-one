@@ -29,14 +29,16 @@ export class OrdersServiceImpl implements OrdersService {
 
   async place(input: PlaceOrderInput, caller: CallerInfo): Promise<Order> {
     const { database, log, customerClient, publisher } = this
+
     // service-to-service call; the user's JWT is forwarded because customer-service authorizes on it
     const customer = await customerClient.customers.get
       .query({ id: input.customerId }, { context: { ...caller } })
       .catch(err => {
         throw err instanceof TRPCClientError && err.data?.code === 'NOT_FOUND'
-          ? notFound('Customer', input.customerId)
+          ? notFound('Customer', String(input.customerId))
           : err
       })
+    if (customer.deletedAt) throw notFound('Customer', String(input.customerId))
 
     const [row] = await database.db
       .insert(orders)
@@ -46,6 +48,7 @@ export class OrdersServiceImpl implements OrdersService {
         totalCents: input.totalCents
       })
       .returning()
+
     const order: Order = { ...row!, createdAt: row!.createdAt.toISOString() }
 
     // after the commit, best effort; failures are logged by the publisher and never fail the request
@@ -62,6 +65,7 @@ export class OrdersServiceImpl implements OrdersService {
         ...(caller.userId && { userId: caller.userId })
       }
     )
+
     log.info({ orderId: order.id }, 'order placed')
     return order
   }

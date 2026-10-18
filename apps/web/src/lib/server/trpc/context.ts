@@ -13,6 +13,7 @@ export interface WebContext extends BaseContext {
 // the trace id comes from the browser's x-trace-id header or is generated; the JWT comes from the Redis session
 export const createWebContext = (locals: App.Locals, cookies: Cookies, headers: Headers): WebContext => {
 	const services = getServices()
+
 	return {
 		...baseContextFromHeaders(headers, services.log, services.config.SERVICE_ID, locals.jwt),
 		services,

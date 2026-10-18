@@ -19,6 +19,7 @@ export class DocumentsServiceImpl implements DocumentsService {
       .from(documents)
       .where(eq(documents.orderId, orderId))
     if (!row) throw notFound('Document for order', orderId)
+
     return { ...row, createdAt: row.createdAt.toISOString() }
   }
 
@@ -28,6 +29,7 @@ export class DocumentsServiceImpl implements DocumentsService {
       .insert(documents)
       .values({ orderId })
       .onConflictDoNothing()
+
     this.log.info({ orderId }, 'order confirmation document generated')
   }
 }

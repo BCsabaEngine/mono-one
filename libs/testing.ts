@@ -8,17 +8,26 @@ export const silentLogger = pino({ level: 'silent' })
 
 /** Real Postgres in a container; call `stop()` in afterAll. */
 export const startPostgres = async () => {
-  const container = await new PostgreSqlContainer('postgres:18.6-alpine3.24').start()
+  const container = await new PostgreSqlContainer(
+    'postgres:18.6-alpine3.24'
+  ).start()
+
   return { url: container.getConnectionUri(), stop: () => container.stop() }
 }
 
 /** Binds a server to an ephemeral port and returns its base URL. */
 export const listen = (server: Server) =>
   new Promise<string>(resolve =>
-    server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}`))
+    server.listen(0, '127.0.0.1', () =>
+      resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}`)
+    )
   )
 
-export const testBaseConfig = (serviceId: string, databaseUrl: string, extra: Record<string, string> = {}) =>
+export const testBaseConfig = (
+  serviceId: string,
+  databaseUrl: string,
+  extra: Record<string, string> = {}
+) =>
   loadConfig(baseEnvSchema, {
     SERVICE_ID: serviceId,
     DATABASE_URL: databaseUrl,

@@ -30,8 +30,10 @@ export const runMigrations = async ({
   const client = await pool.connect()
   try {
     await client.query('select pg_advisory_lock($1)', [LOCK_KEY])
+
     const before = await appliedCount(pool, schema)
     await migrate(drizzle(client), { migrationsFolder, migrationsSchema: schema })
+
     logger.info({ applied: (await appliedCount(pool, schema)) - before, migrationsFolder }, 'migrations done')
   } finally {
     await client.query('select pg_advisory_unlock($1)', [LOCK_KEY]).catch(() => undefined)
@@ -44,6 +46,7 @@ export const migrateService = async ({ serviceId, migrationsFolder }: { serviceI
   const config = loadConfig(baseEnvSchema, { SERVICE_ID: serviceId, ...process.env })
   const logger = createLogger({ service: serviceId, level: config.LOG_LEVEL })
   const { pool, close } = createDb(config, logger)
+
   try {
     await runMigrations({ pool, migrationsFolder, logger, schema: config.DB_SCHEMA ?? 'public' })
   } finally {

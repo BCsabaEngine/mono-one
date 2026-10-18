@@ -4,7 +4,9 @@
 	import { trpc } from '#lib/trpc.ts'
 
 	let log = $state<string[]>([])
+
 	const show = (label: string, value: unknown) => (log = [`${label}: ${JSON.stringify(value)}`, ...log])
+
 	const run = (label: string, fn: () => Promise<unknown>) =>
 		fn().then(
 			v => show(label, v),
@@ -19,7 +21,9 @@
 	const getDocument = () =>
 		run('documents.get', async () => {
 			const order = await trpc.orders.place.mutate({ customerId: DEMO_CUSTOMER_ID, totalCents: 500 })
+
 			await new Promise(r => setTimeout(r, 300)) // the document is created by the order.placed event
+
 			return trpc.documents.get.query({ orderId: order.id })
 		})
 

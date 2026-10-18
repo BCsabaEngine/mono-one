@@ -15,13 +15,14 @@ import type { Config } from './config'
 import * as schema from './db/schema'
 
 const orderId = crypto.randomUUID()
+
 const event = {
   id: crypto.randomUUID(),
   type: 'order.placed',
   version: 1,
   occurredAt: new Date().toISOString(),
   traceId: 'trace-0001',
-  payload: { orderId, customerId: crypto.randomUUID(), totalCents: 500 }
+  payload: { orderId, customerId: 1, totalCents: 500 }
 }
 
 describe('document-service (real Postgres)', () => {
@@ -35,12 +36,15 @@ describe('document-service (real Postgres)', () => {
       testBaseConfig('document-service', pg.url) as Config,
       silentLogger
     )
+
     // no committed migrations during development (CLAUDE.md): create the tables from the schema, like `drizzle-kit push`
     await (
       await pushSchema(schema, app.container.cradle.database.db as never)
     ).apply()
+
     baseUrl = await listen(app.server)
   })
+
   afterAll(async () => {
     app.server.close()
     await app.container.dispose()
@@ -58,11 +62,13 @@ describe('document-service (real Postgres)', () => {
     await expect(
       events('order-service').events.deliver.mutate(event)
     ).resolves.toEqual({ ok: true })
+
     const docs = createServiceClient<AppRouter>({
       url: `${baseUrl}/trpc`,
       serviceId: 'test',
       timeoutMs: 5000
     })
+
     const doc = await docs.documents.get.query(
       { orderId },
       { context: { jwt: unsignedJwt({ sub: 'user-1' }) } satisfies CallContext }

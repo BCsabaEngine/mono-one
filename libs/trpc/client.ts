@@ -45,6 +45,7 @@ export const createServiceClient = <R extends AnyTRPCRouter>(opts: {
         fetch: fetchWithTimeout(opts.timeoutMs),
         headers: ({ op }) => {
           const { jwt, traceId, callChain } = (op.context ?? {}) as CallContext
+
           return {
             [SERVICE_ID_HEADER]: opts.serviceId,
             ...(traceId && { [TRACE_ID_HEADER]: traceId }),

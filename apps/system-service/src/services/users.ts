@@ -1,6 +1,11 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import { conflict, notFound, unauthorized } from '@lib/errors'
+import {
+  conflict,
+  isUniqueViolation,
+  notFound,
+  unauthorized
+} from '@lib/errors'
 import { PERMISSIONS } from '@api/system'
 import type {
   AddUserInput,
@@ -20,12 +25,6 @@ type Executor = Pick<NodePgDatabase<typeof schema>, 'select'> // the db or a tra
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 const byPermissionOrder = (a: Permission, b: Permission) =>
   PERMISSIONS.indexOf(a) - PERMISSIONS.indexOf(b)
-const isUniqueViolation = (err: unknown): boolean =>
-  typeof err === 'object' &&
-  err !== null &&
-  ('code' in err
-    ? err.code === '23505'
-    : 'cause' in err && isUniqueViolation(err.cause))
 
 export class UsersServiceImpl implements UsersService {
   private readonly database: Dependencies['database']
@@ -46,6 +45,7 @@ export class UsersServiceImpl implements UsersService {
       db.select().from(user).where(inArray(user.id, ids)),
       db.select().from(permission).where(inArray(permission.userId, ids))
     ])
+
     const byId = new Map(
       rows.map(({ password: _password, ...u }) => [
         u.id,
@@ -53,8 +53,10 @@ export class UsersServiceImpl implements UsersService {
       ])
     )
     perms.forEach(p => byId.get(p.userId)?.permissions.push(p.name))
+
     return ids.flatMap(id => {
       const u = byId.get(id)
+
       return u
         ? [
             {
@@ -72,6 +74,7 @@ export class UsersServiceImpl implements UsersService {
   private async loadOne(id: number, db?: Executor) {
     const [found] = await this.load([id], db)
     if (!found) throw notFound('User', String(id))
+
     return found
   }
 
@@ -86,6 +89,7 @@ export class UsersServiceImpl implements UsersService {
       .where(and(eq(user.email, normalizeEmail(email)), isNull(user.deleted)))
     if (!row || !verifyPassword(password, row.password))
       throw unauthorized('Invalid credentials')
+
     return this.loadOne(row.id)
   }
 
@@ -101,14 +105,17 @@ export class UsersServiceImpl implements UsersService {
           })
           .returning({ id: user.id })
         if (!row) throw new Error('insert returned no row')
+
         if (permissions.length)
           await tx
             .insert(permission)
             .values(
               [...new Set(permissions)].map(name => ({ userId: row.id, name }))
             )
+
         return row.id
       })
+
       this.log.info({ targetUserId: id }, 'user added')
       return await this.loadOne(id)
     } catch (err) {
@@ -124,6 +131,7 @@ export class UsersServiceImpl implements UsersService {
         .where(eq(user.id, id))
         .for('update')
       if (!existing || existing.deleted) throw notFound('User', String(id))
+
       await tx
         .update(user)
         .set({
@@ -132,8 +140,10 @@ export class UsersServiceImpl implements UsersService {
           ...(password && { password: hashPassword(password) })
         })
         .where(eq(user.id, id))
+
       if (permissions) {
         await tx.delete(permission).where(eq(permission.userId, id))
+
         if (permissions.length)
           await tx
             .insert(permission)
@@ -141,6 +151,7 @@ export class UsersServiceImpl implements UsersService {
               [...new Set(permissions)].map(name => ({ userId: id, name }))
             )
       }
+
       this.log.info({ targetUserId: id }, 'user updated')
       return this.loadOne(id, tx)
     })
@@ -152,10 +163,12 @@ export class UsersServiceImpl implements UsersService {
       .from(user)
       .where(eq(user.id, id))
     if (!existing) throw notFound('User', String(id))
+
     await this.db
       .update(user)
       .set({ deleted: new Date(), updated: new Date() })
       .where(and(eq(user.id, id), isNull(user.deleted)))
+
     this.log.info({ targetUserId: id }, 'user deleted')
     return { id }
   }

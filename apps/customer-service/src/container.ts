@@ -9,6 +9,8 @@ import { createDb } from '@lib/db'
 import type { Logger } from '@lib/logging'
 import type { Config } from './config'
 import * as schema from './db/schema'
+import { AddressesServiceImpl } from './services/addresses'
+import { ContactsServiceImpl } from './services/contacts'
 import { CustomersServiceImpl } from './services/customers'
 
 export interface Dependencies {
@@ -16,6 +18,8 @@ export interface Dependencies {
   log: Logger
   database: ReturnType<typeof createDb<typeof schema>>
   customers: CustomersServiceImpl
+  addresses: AddressesServiceImpl
+  contacts: ContactsServiceImpl
 }
 
 /** Root container; the pg pool is disposed through container.dispose() on shutdown. */
@@ -30,7 +34,9 @@ export const buildContainer = (config: Config, log: Logger) =>
     )
       .singleton()
       .disposer(d => d.close()),
-    customers: asClass(CustomersServiceImpl).scoped()
+    customers: asClass(CustomersServiceImpl).scoped(),
+    addresses: asClass(AddressesServiceImpl).scoped(),
+    contacts: asClass(ContactsServiceImpl).scoped()
   })
 
 export type Container = ReturnType<typeof buildContainer>

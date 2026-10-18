@@ -9,6 +9,7 @@ import { createContext } from './trpc/context'
 /** Composition root shared by main.ts and the integration tests. */
 export const createApp = (config: Config, log: Logger) => {
   const container = buildContainer(config, log)
+
   const server = createServiceServer({
     log,
     trpc: { router: appRouter, createContext: createContext(container) },
@@ -19,5 +20,6 @@ export const createApp = (config: Config, log: Logger) => {
     },
     ready: container.cradle.database.ping
   })
+
   return { container, server }
 }

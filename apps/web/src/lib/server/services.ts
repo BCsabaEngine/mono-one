@@ -9,17 +9,20 @@ import { getConfig } from './config'
 
 const build = () => {
 	const config = getConfig()
+
 	const opts = (url: string) => ({
 		url: `${url}/trpc`,
 		serviceId: config.SERVICE_ID,
 		timeoutMs: config.REQUEST_TIMEOUT_MS
 	})
+
 	return {
 		config,
 		log: createLogger({
 			service: config.SERVICE_ID,
 			level: config.LOG_LEVEL
 		}),
+
 		// Redis holds JWTs only (key prefix jwt:)
 		redis: new Redis(config.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 }),
 		customer: createServiceClient<CustomerRouter>(opts(config.CUSTOMER_SERVICE_URL)),
@@ -30,4 +33,5 @@ const build = () => {
 }
 
 let services: ReturnType<typeof build> | undefined
+
 export const getServices = () => (services ??= build())

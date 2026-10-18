@@ -15,9 +15,11 @@ export const createApp = (
   overrides: Partial<Pick<Dependencies, 'customerClient' | 'publisher'>> = {}
 ) => {
   const container = buildContainer(config, log)
+
   Object.entries(overrides).forEach(([name, value]) =>
     container.register({ [name]: asValue(value) })
   )
+
   const server = createServiceServer({
     log,
     trpc: { router: appRouter, createContext: createContext(container) },
@@ -28,5 +30,6 @@ export const createApp = (
     },
     ready: container.cradle.database.ping
   })
+
   return { container, server }
 }

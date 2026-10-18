@@ -25,13 +25,13 @@ core services ──> Postgres (one database each)        web ──> Redis (JWT
 
 ### Apps and example endpoints
 
-| App                | Port | Procedure                                                                               | Notes                                                                                  |
-| ------------------ | ---- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `web`              | 3000 | `customers.get`, `orders.place`, `documents.get`, `live.orderPlaced` (SSE)              | proxies to the services; runs as exactly one instance                                  |
-| `customer-service` | 3001 | `customers.get`                                                                         |                                                                                        |
-| `order-service`    | 3002 | `orders.place`                                                                          | calls `customers.get` (forwarding the JWT), stores the order, publishes `order.placed` |
-| `document-service` | 3003 | `documents.get`                                                                         | the document is created by the `order.placed` event                                    |
-| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete` | users + flat permissions (see System service); later runtime configs, tasks, calendar  |
+| App                | Port | Procedure                                                                               | Notes                                                                                             |
+| ------------------ | ---- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `web`              | 3000 | `customers.get`, `orders.place`, `documents.get`, `live.orderPlaced` (SSE)              | proxies to the services; runs as exactly one instance                                             |
+| `customer-service` | 3001 | `customers.get/list/add/update/delete`, `addresses.*`, `contacts.*`                     | customers with addresses and contacts (see Customer service); `web` only forwards `customers.get` |
+| `order-service`    | 3002 | `orders.place`                                                                          | calls `customers.get` (forwarding the JWT), stores the order, publishes `order.placed`            |
+| `document-service` | 3003 | `documents.get`                                                                         | the document is created by the `order.placed` event                                               |
+| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete` | users + flat permissions (see System service); later runtime configs, tasks, calendar             |
 
 Directions: `web` -> all four, `order-service` -> `customer-service`. Demo data: `pnpm nx seed <svc>` (customer-service, order-service, system-service; see Data rules). The web `auth.login` tRPC mutation is the real login (`users.auth`, then an unsigned JWT with `sub`, `permissions`, `email`, `name` stored in Redis; it sets the `sid` cookie through `ctx.cookies`); seeded starter user `hello@mono.hu` / `hello` (`pnpm nx seed system-service`).
 
@@ -76,7 +76,7 @@ libs/
 
 - Libs are source-consumed (not buildable); path mappings live in `tsconfig.base.json`; `apps/web/tsconfig.json` repeats them (relative to itself) because it extends `$app/tsconfig`, not the base, so a new alias goes into both files. No `baseUrl` (deprecated in TS 6); entries start with `./`.
 - `*-api` libs hold the contract (`contract.ts`) and the router (`server.ts`) and have one entry point, `@api/<svc>` (`@api/*` maps to `libs/*-api/src/index.ts`; contract re-exports, `AppRouter` type, plus `appRouter` and the context type, which ESLint restricts to the owning service app). The router never imports from an app, so the Nx graph stays acyclic.
-- Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, trace child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `seedIds` (shared seed-id scale 1..100 per entity), `seeding` (seeder bootstrap), `testing` (Testcontainers helpers, tests only). `libs/tsconfig.json` (extends the base, includes `*.ts`, `trpc`, `migrations`) exists only so the editor resolves `@types/node` for them; no Nx target uses it.
+- Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, trace child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `businessColumns` (`createdAt` / `updatedAt` / `deletedAt` for every business table; schemas import it by relative path because drizzle-kit ignores tsconfig paths), `seedIds` (shared seed-id scale 1..100 per entity), `seeding` (seeder bootstrap), `testing` (Testcontainers helpers, tests only). `libs/tsconfig.json` (extends the base, includes `*.ts`, `trpc`, `migrations`) exists only so the editor resolves `@types/node` for them; no Nx target uses it.
 
 ### Boundaries (root `eslint.config.mjs`)
 
@@ -104,7 +104,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - Each service owns its database (separate `DATABASE_URL`, optional `DB_SCHEMA`); no service reads another's tables and there are no cross-service foreign keys. Cross-service data goes through tRPC. One pg pool per service with a deliberate size.
 - Each service keeps its Drizzle schema, migrations and one-line `drizzle.config.ts` in its own app. `drizzle.config.ts` imports `defineDrizzleConfig` by relative path because drizzle-kit ignores tsconfig paths.
 - No service has committed migrations during development: `pnpm dev:migrate` / `pnpm nx dev:migrate <svc>` (local only; not `nx migrate`, that is Nx's built-in upgrade command) runs `drizzle-kit push`. The migration runner stays for later (`libs/migrations`: advisory-locked, `__drizzle_migrations` in the same schema as the tables (`DB_SCHEMA`, default `public`); `node migrate.mjs` in the image, `pnpm nx db-generate <svc>`). When migrations come back: generate and commit the SQL per service, add a real `migrate` target running `src/migrate.ts` (`dev:migrate` stays the local push) and re-add the compose migrate jobs.
-- **Seed data is code, never a migration.** `pnpm seed` / `pnpm nx seed <svc>` (tsx, not bundled into the images) wipes the service's tables and re-inserts deterministic demo rows; it refuses `NODE_ENV=production`. All seed ids come from `libs/seedIds.ts` (`seedId(entity, n)` / `seedIds(entity)`, n = 1..100, one UUID namespace per entity), so services reference each other's seed rows (an order's `customerId`) without reading each other's databases. New entity: add its prefix there; new seeded service: `src/db/seed.ts` (`seed(db)`) + `src/seed.ts` (`seedService`) + a `seed` target.
+- **Seed data is code, never a migration.** `pnpm seed` / `pnpm nx seed <svc>` (tsx, not bundled into the images) wipes the service's tables and re-inserts deterministic demo rows; it refuses `NODE_ENV=production`. Seed ids come from `libs/seedIds.ts` (`seedId(entity, n)` / `seedIds(entity)`, n = 1..100, one UUID namespace per entity) for UUID-keyed entities; integer-identity services (system, customer) restart their identities at 1 and seed 1..100, so an order's `customerId` n refers to customer n without reading the other database. New entity: add its prefix there; new seeded service: `src/db/seed.ts` (`seed(db)`) + `src/seed.ts` (`seedService`) + a `seed` target.
 
 ### Schema conventions (new schemas)
 
@@ -113,6 +113,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - Table names are singular, never plural.
 - Use `text` freely instead of `varchar(n)`.
 - Enums: Drizzle enums on a text column (`text('col', { enum: [...] })`); never create Postgres enum types (`pgEnum`).
+- Every business table has `created_at` and `updated_at` (timestamptz, not null, default now; `updated_at` refreshed on every update) and, only if it uses soft delete, a nullable `deleted_at` (null = active). Drizzle properties: `createdAt` / `updatedAt` / `deletedAt`; spread `businessColumns` from `libs/businessColumns.ts` (drop-in for tables without soft delete: pick the two timestamps).
 - The current schemas predate these rules (UUID ids, plural names). They will be dropped and recreated later, so do not retrofit them.
 
 ### Migration workflow (during development)
@@ -128,6 +129,13 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - Its seed uses integer identities (restarted at 1: the starter user has id 1 with every permission), not `libs/seedIds.ts`, which is UUID-based; add a `seedIds` mapping only when another service must reference seed users.
 - The schema imports `PERMISSIONS` by relative path from a dependency-free file because drizzle-kit ignores tsconfig paths (same reason as `drizzle.config.ts`; the import carries an eslint-disable).
 - No committed migrations yet (see Migration workflow): create the tables with `pnpm dev:migrate` (every service's `dev:migrate` target runs `drizzle-kit push`, after `pnpm dev:infra`; an existing Postgres volume needs `CREATE DATABASE mono_system;` once because the init script only runs on an empty volume), then `pnpm nx seed system-service`. Tests create the tables with drizzle-kit's `pushSchema`. Compose has no migrate jobs; generate migrations and add them before deploying. `src/migrate.ts` (the image's `migrate.mjs`) exists only because the esbuild defaults bundle it; it needs generated migrations to be useful.
+
+## Customer service
+
+- `customer-service` owns `customer`, `address` and `contact` (database `mono_customer`); one service/router namespace per table (`customers`, `addresses`, `contacts`). All three have `created_at`, `updated_at`, `deleted_at` (soft delete); children cascade only on a hard delete; soft-deleting a customer leaves its addresses and contacts untouched.
+- `customer`: `code` (unique among active customers, a soft-deleted one frees it), `name`, `comment`. `address`: `type` (`hq|site|mail`), optional `name`, `country` (EU member state ISO code), `zip`, `city`, `address`. `contact`: `type` (`stock|management|sales`), mandatory `name`, optional `phone`, `email`. Type and country lists are code-only (`libs/customer-api/src/domain.ts`, loaded by the Drizzle schema by relative path like `system-api/permissions.ts`).
+- `customers.get` / `customers.list` (1..100 ids, order kept, unknown ids omitted) need an identity and return soft-deleted customers too (`deletedAt` set; callers such as order-service treat them as missing) with their active addresses and contacts (also for a deleted customer). Adding an address or contact to a deleted customer is NOT_FOUND. All `add` / `update` / `delete` calls need the `customer.admin` permission. On `update`, omitted fields stay and `null` clears an optional column. Deletes are idempotent.
+- Not exposed through `web` yet (no admin UI); the seed creates 100 customers (`C-0001`..) with an hq address and a sales contact.
 
 ## Events (no bus, no persistence, no retry)
 
@@ -162,7 +170,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - `dev:migrate` is the only root script that passes `--output-style=static` (Nx prints task logs inline instead of the TUI); `dev` uses `stream`.
 - One root ESLint flat config covers everything, including the Svelte rules scoped to `apps/web` (`eslint-plugin-svelte`). Prettier: root config for services and libs; `apps/web` has its own (`prettier-plugin-svelte`, tabs), the nearest config wins.
 - Type-only imports are always top-level `import type { X }`, never `import { type X }` (`consistent-type-imports` with `separate-type-imports`, `no-import-type-side-effects`, and `no-restricted-syntax` banning inline `type` specifiers). `verbatimModuleSyntax` is on.
-- Code style: compact, arrow functions, no boilerplate; services single quotes, no semicolons; `apps/web` uses tabs.
+- Code style: compact, arrow functions, no boilerplate; services single quotes, no semicolons; `apps/web` uses tabs. Compact but loose: one blank line between logical blocks (setup, each multi-line query/call, multi-line `if`/`try` blocks, the final `return`; a log line and its `return` may stay together); a one-line guard stays glued to the statement it guards; tests separate arrange / act / assert; never a blank line right after `{` or before `}`.
 
 ## Commands
 

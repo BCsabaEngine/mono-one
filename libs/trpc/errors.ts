@@ -31,9 +31,11 @@ export const toTRPCError = (err: unknown): TRPCError =>
 /** initTRPC + the single place where domain errors become TRPCErrors; unknown errors are logged and masked. */
 export const createTRPC = <Ctx extends BaseContext>() => {
   const t = initTRPC.context<Ctx>().create()
+
   const procedure = t.procedure.use(async ({ ctx, path, next }) => {
     const started = performance.now()
     const result = await next()
+
     ctx.log.info(
       {
         path,
@@ -43,15 +45,20 @@ export const createTRPC = <Ctx extends BaseContext>() => {
       },
       'rpc'
     )
+
     if (result.ok) return result
+
     const { cause } = result.error
+
     if (
       !(cause instanceof DomainError) &&
       result.error.code === 'INTERNAL_SERVER_ERROR'
     )
       ctx.log.error({ err: cause ?? result.error, path }, 'unhandled error')
+
     throw cause instanceof DomainError ? toTRPCError(cause) : result.error
   })
+
   return { t, router: t.router, procedure, mergeRouters: t.mergeRouters }
 }
 

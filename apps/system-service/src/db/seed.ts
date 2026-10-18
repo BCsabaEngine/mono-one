@@ -11,6 +11,7 @@ export const seed = (db: NodePgDatabase<typeof schema>) =>
     await tx.execute(
       sql`truncate table ${permission}, ${user} restart identity`
     )
+
     const [hello] = await tx
       .insert(user)
       .values({
@@ -19,6 +20,7 @@ export const seed = (db: NodePgDatabase<typeof schema>) =>
         password: hashPassword('hello')
       })
       .returning({ id: user.id })
+
     await tx
       .insert(permission)
       .values(PERMISSIONS.map(name => ({ userId: hello!.id, name })))

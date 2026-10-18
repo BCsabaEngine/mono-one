@@ -19,6 +19,7 @@ import { seed } from './db/seed'
 const as = (permissions: string[]) => ({
   context: { jwt: unsignedJwt({ sub: '1', permissions }) } satisfies CallContext
 })
+
 const admin = as(['user.admin'])
 const plain = as([])
 
@@ -33,16 +34,19 @@ describe('system-service (real Postgres)', () => {
       testBaseConfig('system-service', pg.url) as Config,
       silentLogger
     )
+
     // no committed migrations during development (CLAUDE.md): create the tables from the schema, like `drizzle-kit push`
     await (
       await pushSchema(schema, app.container.cradle.database.db as never)
     ).apply()
+
     client = createServiceClient<AppRouter>({
       url: `${await listen(app.server)}/trpc`,
       serviceId: 'test',
       timeoutMs: 5000
     })
   })
+
   afterAll(async () => {
     app.server.close()
     await app.container.dispose()
@@ -54,6 +58,7 @@ describe('system-service (real Postgres)', () => {
     await seed(db)
     await seed(db) // wipes and restarts identities: still exactly one user with id 1
     expect(await db.select({ id: user.id }).from(user)).toEqual([{ id: 1 }])
+
     const hello = await client.users.auth.mutate({
       email: 'Hello@mono.hu',
       password: 'hello'
@@ -99,6 +104,7 @@ describe('system-service (real Postgres)', () => {
       name: 'Ann',
       permissions: ['customer.read', 'order.place']
     })
+
     await expect(
       client.users.add.mutate(
         { email: 'ann@mono.hu', name: 'Other', password: 'x' },
@@ -122,6 +128,7 @@ describe('system-service (real Postgres)', () => {
     expect(Date.parse(updated.updated)).toBeGreaterThanOrEqual(
       Date.parse(added.updated)
     )
+
     await expect(
       client.users.auth.mutate({ email: 'ann@mono.hu', password: 'p1' })
     ).rejects.toMatchObject({ data: { code: 'UNAUTHORIZED' } })
@@ -142,6 +149,7 @@ describe('system-service (real Postgres)', () => {
       { email: 'bob@mono.hu', name: 'Bob', password: 'b' },
       admin
     )
+
     const users = await client.users.getMany.query(
       { ids: [id, 1, 9999, id] },
       plain
@@ -160,9 +168,11 @@ describe('system-service (real Postgres)', () => {
       admin
     )
     expect(await client.users.delete.mutate({ id }, admin)).toEqual({ id })
+
     const first = await client.users.get.query({ id }, plain)
     expect(first.deleted).not.toBeNull()
     expect(first.permissions).toEqual(['order.place'])
+
     await client.users.delete.mutate({ id }, admin)
     expect((await client.users.get.query({ id }, plain)).deleted).toBe(
       first.deleted
@@ -170,6 +180,7 @@ describe('system-service (real Postgres)', () => {
     expect(
       (await client.users.getMany.query({ ids: [id] }, plain))[0]?.deleted
     ).toBe(first.deleted)
+
     await expect(
       client.users.auth.mutate({ email: 'carl@mono.hu', password: 'c' })
     ).rejects.toMatchObject({ data: { code: 'UNAUTHORIZED' } })
@@ -192,6 +203,7 @@ describe('system-service (real Postgres)', () => {
       },
       admin
     )
+
     await db.delete(user).where(eq(user.id, id))
     expect(
       await db.select().from(permission).where(eq(permission.userId, id))

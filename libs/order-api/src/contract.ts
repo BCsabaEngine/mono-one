@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const orderSchema = z.object({
   id: z.uuid(),
-  customerId: z.uuid(),
+  customerId: z.number().int().positive(),
   customerName: z.string(),
   totalCents: z.number().int().positive(),
   status: z.enum(['placed']),
@@ -11,7 +11,7 @@ export const orderSchema = z.object({
 export type Order = z.infer<typeof orderSchema>
 
 export const placeOrderInput = z.object({
-  customerId: z.uuid(),
+  customerId: z.number().int().positive(),
   totalCents: z.number().int().positive()
 })
 export type PlaceOrderInput = z.infer<typeof placeOrderInput>

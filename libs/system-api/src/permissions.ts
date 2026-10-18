@@ -3,6 +3,7 @@
 export const PERMISSIONS = [
   'user.admin',
   'customer.read',
+  'customer.admin',
   'order.place',
   'document.read'
 ] as const

@@ -13,8 +13,11 @@ export const createContext =
       container.cradle.log,
       container.cradle.config.SERVICE_ID
     )
+
     const scope = container
       .createScope<Dependencies>()
       .register({ log: asValue(base.log) })
-    return { ...base, services: { customers: scope.cradle.customers } }
+
+    const { customers, addresses, contacts } = scope.cradle
+    return { ...base, services: { customers, addresses, contacts } }
   }

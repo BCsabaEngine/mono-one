@@ -4,7 +4,10 @@ import { EVENTS, ownersDoNotSubscribe } from './registry'
 describe('events registry', () => {
   it('never lists an owner among its own subscribers', () => {
     expect(ownersDoNotSubscribe).toBe(true)
-    Object.values(EVENTS).forEach(def => expect(def.subscribers as readonly string[]).not.toContain(def.owner))
+
+    Object.values(EVENTS).forEach(def =>
+      expect(def.subscribers as readonly string[]).not.toContain(def.owner)
+    )
   })
 
   it('uses the owner-defined schema for validation', () => {

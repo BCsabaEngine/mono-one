@@ -55,6 +55,7 @@ export const createPublisher = <S extends ServiceId>({
         })
       )
       .get(target)!
+
   const failures = new Map<string, number>() // `${type}:${subscriber}` -> failed delivery count
 
   const publish = async <T extends EventsOwnedBy<S>>(
@@ -63,6 +64,7 @@ export const createPublisher = <S extends ServiceId>({
     opts: { traceId?: string; callChain?: string[]; userId?: string } = {}
   ): Promise<PublishResult> => {
     const def = EVENTS[type]
+
     const traceId = opts.traceId ?? randomUUID()
     const event = def.schema.parse({
       id: randomUUID(),
@@ -73,8 +75,10 @@ export const createPublisher = <S extends ServiceId>({
       ...(opts.userId && { userId: opts.userId }),
       payload
     })
+
     const started = performance.now()
     const subscribers = def.subscribers as readonly ServiceId[]
+
     const settled = await Promise.allSettled(
       subscribers.map(s =>
         client(s)
@@ -87,23 +91,29 @@ export const createPublisher = <S extends ServiceId>({
           .then(() => s)
       )
     )
+
     const result: PublishResult = { delivered: [], failed: [] }
     settled.forEach((r, i) => {
       const subscriber = subscribers[i]!
+
       if (r.status === 'fulfilled')
         return void result.delivered.push(subscriber)
+
       const error =
         r.reason instanceof Error ? r.reason.message : String(r.reason)
       result.failed.push({ subscriber, error })
+
       failures.set(
         `${type}:${subscriber}`,
         (failures.get(`${type}:${subscriber}`) ?? 0) + 1
       )
+
       log.warn(
         { eventType: type, subscriber, traceId, error },
         'event delivery failed'
       )
     })
+
     log.info(
       {
         eventId: event.id,
@@ -114,6 +124,7 @@ export const createPublisher = <S extends ServiceId>({
       },
       'event published'
     )
+
     return result
   }
 
@@ -133,6 +144,7 @@ export const createEventsRouter = <S extends ServiceId>(
   handlers: Handlers<S>
 ) => {
   const { router, procedure } = createTRPC<BaseContext>()
+
   return router({
     events: router({
       deliver: procedure
@@ -145,17 +157,21 @@ export const createEventsRouter = <S extends ServiceId>(
               (typeof EVENTS)[keyof typeof EVENTS] | undefined
             >
           )[input.type]
+
           if (
             !def ||
             !(def.subscribers as readonly ServiceId[]).includes(serviceId)
           )
             throw badRequest(`${serviceId} does not subscribe to ${input.type}`)
+
           // consistency check against bugs and misconfiguration, not a security control
           if (ctx.serviceId !== def.owner)
             throw forbidden(`${input.type} may only be sent by ${def.owner}`)
+
           const parsed = def.schema.safeParse(input)
           if (!parsed.success)
             throw badRequest(`invalid ${input.type} event`, parsed.error.issues)
+
           // events carry no JWT, so the envelope's userId is the only way to keep it in the handler's logs
           const handlerCtx = input.userId
             ? {
@@ -164,12 +180,14 @@ export const createEventsRouter = <S extends ServiceId>(
                 log: ctx.log.child({ userId: input.userId })
               }
             : ctx
+
           await (
             handlers as Record<
               string,
               (e: unknown, c: BaseContext) => void | Promise<void>
             >
           )[input.type]!(parsed.data, handlerCtx)
+
           return { ok: true as const }
         })
     })
