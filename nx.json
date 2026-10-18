@@ -1,0 +1,49 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": ["default", "!{projectRoot}/**/*.spec.ts", "!{projectRoot}/**/*.test.ts"],
+    "sharedGlobals": [
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/tsconfig.paths.json",
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/eslint.config.mjs",
+      "{workspaceRoot}/tools/**/*"
+    ]
+  },
+  "targetDefaults": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"],
+      "cache": true
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p {projectRoot}/tsconfig.json"
+      },
+      "dependsOn": ["^typecheck"],
+      "cache": true
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint {projectRoot}"
+      },
+      "cache": true
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root {projectRoot} --passWithNoTests"
+      },
+      "inputs": ["default", "^production"],
+      "cache": true
+    },
+    "docker-build": {
+      "dependsOn": ["build"]
+    }
+  },
+  "defaultBase": "main",
+  "analytics": false
+}

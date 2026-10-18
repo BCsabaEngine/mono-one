@@ -1,0 +1,37 @@
+{
+  "name": "order-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/order-service/src",
+  "tags": ["type:app", "scope:order"],
+  "targets": {
+    "typecheck": {},
+    "lint": {},
+    "test": {},
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx watch --tsconfig apps/order-service/tsconfig.json --env-file-if-exists=apps/order-service/.env apps/order-service/src/main.ts"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/order-service"],
+      "options": { "command": "node tools/build-app.mjs order-service" }
+    },
+    "migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig apps/order-service/tsconfig.json --env-file-if-exists=apps/order-service/.env apps/order-service/src/migrate.ts"
+      }
+    },
+    "db-generate": {
+      "executor": "nx:run-commands",
+      "options": { "command": "drizzle-kit generate --config apps/order-service/src/db/drizzle.config.ts" }
+    },
+    "docker-build": {
+      "executor": "nx:run-commands",
+      "options": { "command": "docker build -f apps/order-service/Dockerfile -t mono-one/order-service:latest ." }
+    }
+  }
+}

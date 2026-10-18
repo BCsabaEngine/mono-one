@@ -1,0 +1,4 @@
+# Each events lib is owned by the service that owns (and is the only sender of) those events.
+/libs/order-events/       @mono-one/order-service-team
+/libs/events-registry/    @mono-one/platform-team
+/libs/events-contract/    @mono-one/platform-team

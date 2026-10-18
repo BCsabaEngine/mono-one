@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@mono/shared-config": ["./libs/shared/config/src/index.ts"],
+      "@mono/shared-logging": ["./libs/shared/logging/src/index.ts"],
+      "@mono/shared-errors": ["./libs/shared/errors/src/index.ts"],
+      "@mono/shared-db": ["./libs/shared/db/src/index.ts"],
+      "@mono/shared-migrations": ["./libs/shared/migrations/src/index.ts"],
+      "@mono/shared-testing": ["./libs/shared/testing/src/index.ts"],
+      "@mono/shared-trpc": ["./libs/shared/trpc/src/index.ts"],
+      "@mono/customer-contract": ["./libs/customer-contract/src/index.ts"],
+      "@mono/customer-api": ["./libs/customer-api/src/index.ts"],
+      "@mono/customer-api/server": ["./libs/customer-api/src/server.ts"],
+      "@mono/order-contract": ["./libs/order-contract/src/index.ts"],
+      "@mono/order-api": ["./libs/order-api/src/index.ts"],
+      "@mono/order-api/server": ["./libs/order-api/src/server.ts"],
+      "@mono/document-contract": ["./libs/document-contract/src/index.ts"],
+      "@mono/document-api": ["./libs/document-api/src/index.ts"],
+      "@mono/document-api/server": ["./libs/document-api/src/server.ts"],
+      "@mono/events-contract": ["./libs/events-contract/src/index.ts"],
+      "@mono/customer-events": ["./libs/customer-events/src/index.ts"],
+      "@mono/order-events": ["./libs/order-events/src/index.ts"],
+      "@mono/events-registry": ["./libs/events-registry/src/index.ts"],
+      "@mono/events-client": ["./libs/events-client/src/index.ts"]
+    }
+  }
+}

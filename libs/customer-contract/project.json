@@ -1,0 +1,8 @@
+{
+  "name": "customer-contract",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/customer-contract/src",
+  "tags": ["type:contract", "scope:customer"],
+  "targets": { "typecheck": {}, "lint": {} }
+}

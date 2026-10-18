@@ -1,0 +1,37 @@
+{
+  "name": "document-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/document-service/src",
+  "tags": ["type:app", "scope:document"],
+  "targets": {
+    "typecheck": {},
+    "lint": {},
+    "test": {},
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx watch --tsconfig apps/document-service/tsconfig.json --env-file-if-exists=apps/document-service/.env apps/document-service/src/main.ts"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/document-service"],
+      "options": { "command": "node tools/build-app.mjs document-service" }
+    },
+    "migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig apps/document-service/tsconfig.json --env-file-if-exists=apps/document-service/.env apps/document-service/src/migrate.ts"
+      }
+    },
+    "db-generate": {
+      "executor": "nx:run-commands",
+      "options": { "command": "drizzle-kit generate --config apps/document-service/src/db/drizzle.config.ts" }
+    },
+    "docker-build": {
+      "executor": "nx:run-commands",
+      "options": { "command": "docker build -f apps/document-service/Dockerfile -t mono-one/document-service:latest ." }
+    }
+  }
+}

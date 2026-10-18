@@ -1,0 +1,8 @@
+{
+  "name": "shared-logging",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/shared/logging/src",
+  "tags": ["type:shared", "scope:shared"],
+  "targets": { "typecheck": {}, "lint": {} }
+}

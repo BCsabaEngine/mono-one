@@ -1,0 +1,79 @@
+# Local development stack. Build the bundles first: `pnpm nx run-many -t build`
+# Only `web` is published to the host: the core services trust the JWT they receive, so they must stay on the private network.
+x-service-urls: &service-urls
+  WEB_URL: http://web:3000
+  CUSTOMER_SERVICE_URL: http://customer-service:3001
+  ORDER_SERVICE_URL: http://order-service:3002
+  DOCUMENT_SERVICE_URL: http://document-service:3003
+
+x-db-service: &db-service
+  depends_on:
+    postgres: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    environment: { POSTGRES_PASSWORD: postgres }
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports: ['5432:5432'] # for local tooling only
+    healthcheck: { test: ['CMD-SHELL', 'pg_isready -U postgres'], interval: 2s, timeout: 3s, retries: 30 }
+
+  redis: # JWT storage for the BFF only
+    image: redis:8.8.3-alpine3.23
+    ports: ['6379:6379'] # for `pnpm dev` (apps running on the host)
+    healthcheck: { test: ['CMD', 'redis-cli', 'ping'], interval: 2s, timeout: 3s, retries: 30 }
+
+  # one-off migration jobs (run as a separate step, not on service start)
+  customer-migrate:
+    build: { context: ., dockerfile: apps/customer-service/Dockerfile }
+    command: ['node', 'migrate.js']
+    environment:
+      { SERVICE_ID: customer-service, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/customer_db' }
+    depends_on: { postgres: { condition: service_healthy } }
+  order-migrate:
+    build: { context: ., dockerfile: apps/order-service/Dockerfile }
+    command: ['node', 'migrate.js']
+    environment: { SERVICE_ID: order-service, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/order_db' }
+    depends_on: { postgres: { condition: service_healthy } }
+  document-migrate:
+    build: { context: ., dockerfile: apps/document-service/Dockerfile }
+    command: ['node', 'migrate.js']
+    environment:
+      { SERVICE_ID: document-service, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/document_db' }
+    depends_on: { postgres: { condition: service_healthy } }
+
+  customer-service:
+    <<: *db-service
+    build: { context: ., dockerfile: apps/customer-service/Dockerfile }
+    environment: { <<: *service-urls, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/customer_db' }
+    depends_on:
+      customer-migrate: { condition: service_completed_successfully }
+  order-service:
+    <<: *db-service
+    build: { context: ., dockerfile: apps/order-service/Dockerfile }
+    environment: { <<: *service-urls, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/order_db' }
+    depends_on:
+      order-migrate: { condition: service_completed_successfully }
+  document-service:
+    <<: *db-service
+    build: { context: ., dockerfile: apps/document-service/Dockerfile }
+    environment: { <<: *service-urls, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/document_db' }
+    depends_on:
+      document-migrate: { condition: service_completed_successfully }
+
+  web: # must run as exactly one instance (events are fanned out in memory to connected browsers)
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    environment:
+      { <<: *service-urls, REDIS_URL: 'redis://redis:6379', ENABLE_DEV_LOGIN: 'true', ORIGIN: 'http://localhost:3000' }
+    ports: ['3000:3000']
+    depends_on:
+      redis: { condition: service_healthy }
+      customer-service: { condition: service_started }
+      order-service: { condition: service_started }
+      document-service: { condition: service_started }
+
+volumes:
+  pgdata:

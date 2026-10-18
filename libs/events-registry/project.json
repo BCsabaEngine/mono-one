@@ -1,0 +1,8 @@
+{
+  "name": "events-registry",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/events-registry/src",
+  "tags": ["type:registry", "scope:registry"],
+  "targets": { "typecheck": {}, "lint": {}, "test": {} }
+}

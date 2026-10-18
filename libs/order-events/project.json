@@ -1,0 +1,8 @@
+{
+  "name": "order-events",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/order-events/src",
+  "tags": ["type:contract", "scope:order"],
+  "targets": { "typecheck": {}, "lint": {} }
+}
