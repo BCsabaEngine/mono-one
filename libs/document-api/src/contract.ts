@@ -2,17 +2,19 @@ import { z } from 'zod'
 
 export const documentSchema = z.object({
   id: z.uuid(),
-  orderId: z.uuid(),
+  orderId: z.number().int().positive(),
   kind: z.enum(['order-confirmation']),
   status: z.enum(['generated']),
   createdAt: z.iso.datetime()
 })
 export type Document = z.infer<typeof documentSchema>
 
-export const getDocumentInput = z.object({ orderId: z.uuid() })
+export const getDocumentInput = z.object({
+  orderId: z.number().int().positive()
+})
 export type GetDocumentInput = z.infer<typeof getDocumentInput>
 
 /** Port implemented by apps/document-service, consumed by the router in document-api. */
 export interface DocumentsService {
-  getByOrder(orderId: string): Promise<Document>
+  getByOrder(orderId: number): Promise<Document>
 }

@@ -5,13 +5,13 @@ The product is split into three business domains. Each is owned by one service a
 | Domain    | Owns                                    | Example capability                             |
 | --------- | --------------------------------------- | ---------------------------------------------- |
 | Customers | customers with addresses and contacts   | look up a customer                             |
-| Orders    | orders and their status                 | place an order for a customer                  |
+| Orders    | orders with their detail lines          | place an order for a customer                  |
 | Documents | documents generated for business events | retrieve the confirmation document of an order |
 
 ## Order flow (current example)
 
 1. A logged-in user places an order for a customer.
-2. Orders checks that the customer exists and stores the order as `placed`.
+2. Orders checks that the customer and the chosen delivery address exist and stores the order with its detail lines (product, quantity, unit price, net value). Orders can be listed, soft deleted, and detail lines added or removed.
 3. Orders announces that the order was placed.
 4. Documents generates an order-confirmation document for it.
 5. The user's screen is notified live that an order was placed.

@@ -1,25 +1,55 @@
+import { z } from 'zod'
 import { callContextOf, createTRPC, requireIdentity } from '@lib/trpc'
 import type { BaseContext } from '@lib/trpc'
-import { orderSchema, placeOrderInput } from './contract'
-import type { OrdersService } from './contract'
+import {
+  addOrderDetailInput,
+  createOrderInput,
+  deleteInput,
+  deletedSchema,
+  listOrdersInput,
+  orderDetailSchema,
+  orderSchema
+} from './contract'
+import type { OrderDetailsService, OrdersService } from './contract'
 
 export interface OrderContext extends BaseContext {
-  services: { orders: OrdersService }
+  services: { orders: OrdersService; orderDetails: OrderDetailsService }
 }
 
 const { router, procedure } = createTRPC<OrderContext>()
 
+const authed = procedure.use(({ ctx, next }) => (requireIdentity(ctx), next()))
+
 export const appRouter = router({
   orders: router({
-    place: procedure
-      .input(placeOrderInput)
+    create: authed
+      .input(createOrderInput)
       .output(orderSchema)
-      .mutation(
-        ({ input, ctx }) => (
-          requireIdentity(ctx),
-          ctx.services.orders.place(input, callContextOf(ctx))
-        )
-      )
+      .mutation(({ input, ctx }) =>
+        ctx.services.orders.create(input, callContextOf(ctx))
+      ),
+
+    list: authed
+      .input(listOrdersInput)
+      .output(z.array(orderSchema))
+      .query(({ input, ctx }) => ctx.services.orders.list(input)),
+
+    delete: authed
+      .input(deleteInput)
+      .output(deletedSchema)
+      .mutation(({ input, ctx }) => ctx.services.orders.delete(input.id))
+  }),
+
+  orderDetails: router({
+    add: authed
+      .input(addOrderDetailInput)
+      .output(orderDetailSchema)
+      .mutation(({ input, ctx }) => ctx.services.orderDetails.add(input)),
+
+    delete: authed
+      .input(deleteInput)
+      .output(deletedSchema)
+      .mutation(({ input, ctx }) => ctx.services.orderDetails.delete(input.id))
   })
 })
 

@@ -13,7 +13,7 @@ import type { ServiceUrls } from './client'
 const log = pino({ level: 'silent' })
 
 const payload = {
-  orderId: crypto.randomUUID(),
+  orderId: 1,
   customerId: 1,
   totalCents: 1200
 }

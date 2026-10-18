@@ -18,5 +18,11 @@ export const createContext =
       .createScope<Dependencies>()
       .register({ log: asValue(base.log) })
 
-    return { ...base, services: { orders: scope.cradle.orders } }
+    return {
+      ...base,
+      services: {
+        orders: scope.cradle.orders,
+        orderDetails: scope.cradle.orderDetails
+      }
+    }
   }

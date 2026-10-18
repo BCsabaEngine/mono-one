@@ -11,7 +11,7 @@
     "env:init": "for f in apps/*/.env.example; do [ -e \"${f%.example}\" ] || cp \"$f\" \"${f%.example}\"; done",
     "dev:infra": "docker compose -f docker-compose.dev.yml up -d --wait",
     "dev:migrate": "nx run-many -t dev:migrate --parallel=4 --output-style=static",
-    "seed": "nx run-many -t seed --parallel=4 --output-style=static",
+    "dev:seed": "nx run-many -t dev:seed --parallel=4 --output-style=static",
     "graph": "nx graph",
     "lint": "nx run-many -t lint -- --fix && eslint --fix libs/*.ts libs/trpc libs/migrations",
     "lint:check": "nx run-many -t lint && eslint libs/*.ts libs/trpc libs/migrations",

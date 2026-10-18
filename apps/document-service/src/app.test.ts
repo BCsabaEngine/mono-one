@@ -14,7 +14,7 @@ import { createApp } from './app'
 import type { Config } from './config'
 import * as schema from './db/schema'
 
-const orderId = crypto.randomUUID()
+const orderId = 1
 
 const event = {
   id: crypto.randomUUID(),

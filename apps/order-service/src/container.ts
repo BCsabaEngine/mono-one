@@ -12,6 +12,7 @@ import { createPublisher, serviceUrls } from '@events/client'
 import type { AppRouter as CustomerAppRouter } from '@api/customer'
 import type { Config } from './config'
 import * as schema from './db/schema'
+import { OrderDetailsServiceImpl } from './services/orderDetails'
 import { OrdersServiceImpl } from './services/orders'
 
 export interface Dependencies {
@@ -21,6 +22,7 @@ export interface Dependencies {
   customerClient: ReturnType<typeof createServiceClient<CustomerAppRouter>>
   publisher: ReturnType<typeof createPublisher<'order-service'>>
   orders: OrdersServiceImpl
+  orderDetails: OrderDetailsServiceImpl
 }
 
 /** Root container; the pg pool is disposed through container.dispose() on shutdown. */
@@ -50,7 +52,8 @@ export const buildContainer = (config: Config, log: Logger) =>
         timeoutMs: config.EVENT_TIMEOUT_MS
       })
     ).singleton(),
-    orders: asClass(OrdersServiceImpl).scoped()
+    orders: asClass(OrdersServiceImpl).scoped(),
+    orderDetails: asClass(OrderDetailsServiceImpl).scoped()
   })
 
 export type Container = ReturnType<typeof buildContainer>

@@ -2,7 +2,7 @@ import { on } from 'node:events'
 import { createTRPC, fromClientError, requireIdentity, unsignedJwt } from '@lib/trpc'
 import { getCustomerInput } from '@api/customer'
 import { getDocumentInput } from '@api/document'
-import { placeOrderInput } from '@api/order'
+import { createOrderInput } from '@api/order'
 import { addUserInput, authUserInput, deleteUserInput, getUserInput, getUsersInput, updateUserInput } from '@api/system'
 import { bus } from '../bus'
 import { deleteJwt, saveJwt, SESSION_COOKIE } from '../session'
@@ -47,10 +47,10 @@ export const webRouter = router({
 	}),
 
 	orders: router({
-		place: authed
-			.input(placeOrderInput)
+		create: authed
+			.input(createOrderInput)
 			.mutation(({ input, ctx }) =>
-				ctx.services.order.orders.place.mutate(input, callContext(ctx)).catch(fromClientError)
+				ctx.services.order.orders.create.mutate(input, callContext(ctx)).catch(fromClientError)
 			)
 	}),
 

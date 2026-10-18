@@ -105,7 +105,7 @@
         "command": "docker build -f {projectRoot}/Dockerfile -t mono-one/{projectName}:latest ."
       }
     },
-    "seed": {
+    "dev:seed": {
       "executor": "nx:run-commands",
       "options": {
         "command": "tsx --tsconfig {projectRoot}/tsconfig.json --env-file-if-exists={projectRoot}/.env {projectRoot}/src/seed.ts"

@@ -6,7 +6,7 @@ import {
 } from '../../../../../libs/customer-api/src/domain'
 import { customer } from './customer'
 // eslint-disable-next-line @nx/enforce-module-boundaries -- drizzle-kit loads the schema without tsconfig paths, so no alias
-import { businessColumns } from '../../../../../libs/businessColumns'
+import { businessTimestampColumnsSoftDelete } from '../../../../../libs/businessColumns'
 
 export const address = pgTable(
   'address',
@@ -21,7 +21,7 @@ export const address = pgTable(
     zip: text('zip').notNull(),
     city: text('city').notNull(),
     address: text('address').notNull(),
-    ...businessColumns
+    ...businessTimestampColumnsSoftDelete
   },
   t => [index('address_customer_id_idx').on(t.customerId)]
 )

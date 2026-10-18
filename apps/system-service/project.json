@@ -11,7 +11,7 @@
       "executor": "@nx/esbuild:esbuild"
     },
     "dev:migrate": {},
-    "seed": {},
+    "dev:seed": {},
     "docker-build": {}
   }
 }

@@ -3,7 +3,7 @@ import { index, integer, pgTable, text } from 'drizzle-orm/pg-core'
 import { CONTACT_TYPES } from '../../../../../libs/customer-api/src/domain'
 import { customer } from './customer'
 // eslint-disable-next-line @nx/enforce-module-boundaries -- drizzle-kit loads the schema without tsconfig paths, so no alias
-import { businessColumns } from '../../../../../libs/businessColumns'
+import { businessTimestampColumnsSoftDelete } from '../../../../../libs/businessColumns'
 
 export const contact = pgTable(
   'contact',
@@ -16,7 +16,7 @@ export const contact = pgTable(
     name: text('name').notNull(),
     phone: text('phone'),
     email: text('email'),
-    ...businessColumns
+    ...businessTimestampColumnsSoftDelete
   },
   t => [index('contact_customer_id_idx').on(t.customerId)]
 )

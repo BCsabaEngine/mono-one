@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
-	import { DEMO_CUSTOMER_ID } from '#lib/demo.ts'
+	import { DEMO_ADDRESS_ID, DEMO_CUSTOMER_ID } from '#lib/demo.ts'
 	import { trpc } from '#lib/trpc.ts'
 
 	let log = $state<string[]>([])
@@ -13,14 +13,20 @@
 			e => show(`${label} failed`, e.message)
 		)
 
-	const login = () => run('login', () => trpc.auth.login.mutate({ email: 'hello@mono.hu', password: 'hello' })) // seeded starter user (pnpm seed)
+	const login = () => run('login', () => trpc.auth.login.mutate({ email: 'hello@mono.hu', password: 'hello' })) // seeded starter user (pnpm dev:seed)
 	const getUser = () => run('users.get', () => trpc.users.get.query({ id: 1 }))
 	const getCustomer = () => run('customers.get', () => trpc.customers.get.query({ id: DEMO_CUSTOMER_ID }))
-	const placeOrder = () =>
-		run('orders.place', () => trpc.orders.place.mutate({ customerId: DEMO_CUSTOMER_ID, totalCents: 1990 }))
+	const newOrder = (title: string, unitPrice: number) =>
+		trpc.orders.create.mutate({
+			customerId: DEMO_CUSTOMER_ID,
+			title,
+			deliveryAddressId: DEMO_ADDRESS_ID,
+			details: [{ productCode: 'P-0001', productName: 'Product 1', quantity: 1, unitPrice }]
+		})
+	const placeOrder = () => run('orders.create', () => newOrder('Demo order', 1990))
 	const getDocument = () =>
 		run('documents.get', async () => {
-			const order = await trpc.orders.place.mutate({ customerId: DEMO_CUSTOMER_ID, totalCents: 500 })
+			const order = await newOrder('Demo order with document', 500)
 
 			await new Promise(r => setTimeout(r, 300)) // the document is created by the order.placed event
 
@@ -43,7 +49,7 @@
 		<button onclick={login}>1. Login as hello@mono.hu</button>
 		<button onclick={getUser}>users.get</button>
 		<button onclick={getCustomer}>customers.get</button>
-		<button onclick={placeOrder}>orders.place</button>
+		<button onclick={placeOrder}>orders.create</button>
 		<button onclick={getDocument}>place order, then documents.get</button>
 	</div>
 	<pre>{log.join('\n')}</pre>

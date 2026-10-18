@@ -6,7 +6,7 @@ export const orderPlaced = defineEvent(
   'order.placed',
   1,
   z.object({
-    orderId: z.uuid(),
+    orderId: z.number().int().positive(),
     customerId: z.number().int().positive(),
     totalCents: z.number().int().positive()
   })

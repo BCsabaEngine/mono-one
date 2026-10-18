@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core'
 // eslint-disable-next-line @nx/enforce-module-boundaries -- drizzle-kit loads the schema without tsconfig paths, so no alias
-import { businessColumns } from '../../../../../libs/businessColumns'
+import { businessTimestampColumnsSoftDelete } from '../../../../../libs/businessColumns'
 
 export const customer = pgTable(
   'customer',
@@ -10,7 +10,7 @@ export const customer = pgTable(
     code: text('code').notNull(),
     name: text('name').notNull(),
     comment: text('comment'),
-    ...businessColumns
+    ...businessTimestampColumnsSoftDelete
   },
   t => [
     uniqueIndex('customer_code_active_key')

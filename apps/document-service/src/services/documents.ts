@@ -13,18 +13,18 @@ export class DocumentsServiceImpl implements DocumentsService {
     this.log = log
   }
 
-  async getByOrder(orderId: string): Promise<Document> {
+  async getByOrder(orderId: number): Promise<Document> {
     const [row] = await this.database.db
       .select()
       .from(documents)
       .where(eq(documents.orderId, orderId))
-    if (!row) throw notFound('Document for order', orderId)
+    if (!row) throw notFound('Document for order', String(orderId))
 
     return { ...row, createdAt: row.createdAt.toISOString() }
   }
 
   /** Idempotent: a repeated order.placed event for the same order is a no-op. */
-  async createForOrder(orderId: string) {
+  async createForOrder(orderId: number) {
     await this.database.db
       .insert(documents)
       .values({ orderId })
