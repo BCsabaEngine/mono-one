@@ -7,7 +7,7 @@ export const EVENTS = {
   'order.placed': {
     owner: 'order-service',
     schema: orderPlaced,
-    subscribers: ['document-service', 'web']
+    subscribers: ['web']
   }
 } as const satisfies Record<string, EventDef>
 

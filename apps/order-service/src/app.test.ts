@@ -176,6 +176,23 @@ describe('order-service (real Postgres)', () => {
     ).rejects.toMatchObject({ data: { code: 'BAD_REQUEST' } })
   })
 
+  it('gets an active order with its details, NOT_FOUND when unknown or deleted', async () => {
+    const created = await client.orders.create.mutate(input, authed)
+
+    expect(await client.orders.get.query({ id: created.id }, authed)).toEqual(
+      created
+    )
+
+    await client.orders.delete.mutate({ id: created.id }, authed)
+
+    await expect(
+      client.orders.get.query({ id: created.id }, authed)
+    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } })
+    await expect(
+      client.orders.get.query({ id: 999_999 }, authed)
+    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } })
+  })
+
   it('lists active orders newest first with their details, filtered and paged', async () => {
     const { db } = app.container.cradle.database
     await db.delete(order)
@@ -317,6 +334,9 @@ describe('order-service (real Postgres)', () => {
       data: { code: 'UNAUTHORIZED' }
     })
     await expect(client.orders.list.query({})).rejects.toMatchObject({
+      data: { code: 'UNAUTHORIZED' }
+    })
+    await expect(client.orders.get.query({ id: 1 })).rejects.toMatchObject({
       data: { code: 'UNAUTHORIZED' }
     })
   })

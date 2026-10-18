@@ -8,10 +8,9 @@
     "typecheck": {},
     "serve": {},
     "build": {
-      "executor": "@nx/esbuild:esbuild"
+      "executor": "@nx/esbuild:esbuild",
+      "options": { "additionalEntryPoints": [], "assets": [] }
     },
-    "dev:migrate": {},
-    "db-generate": {},
     "docker-build": {}
   }
 }

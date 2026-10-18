@@ -2,13 +2,29 @@ import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { createHTTPHandler } from '@trpc/server/adapters/standalone'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pino } from 'pino'
 import { baseContextFromHeaders, createServiceClient } from '@lib/trpc'
 import type { BaseContext } from '@lib/trpc'
 import type { EventsRouter, ServiceId } from './contract'
 import { createEventsRouter, createPublisher } from './client'
 import type { ServiceUrls } from './client'
+
+// the real registry has a single subscriber (web); the delivery tests need two
+vi.mock('./registry', async importOriginal => {
+  const { EVENTS } = await importOriginal<{
+    EVENTS: Record<'order.placed', object>
+  }>()
+
+  return {
+    EVENTS: {
+      'order.placed': {
+        ...EVENTS['order.placed'],
+        subscribers: ['document-service', 'web']
+      }
+    }
+  }
+})
 
 const log = pino({ level: 'silent' })
 
@@ -24,7 +40,9 @@ const subscriber = async (
   serviceId: 'document-service' | 'web',
   onEvent: (e: { type: string }, ctx: BaseContext) => void | Promise<void>
 ) => {
-  const router = createEventsRouter(serviceId, { 'order.placed': onEvent })
+  const router = createEventsRouter(serviceId, {
+    'order.placed': onEvent
+  } as never)
 
   const handler = createHTTPHandler({
     basePath: '/events/',

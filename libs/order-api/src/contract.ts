@@ -60,6 +60,8 @@ export const addOrderDetailInput = z.object({ orderId: id, ...detailFields })
 export type AddOrderDetailInput = z.infer<typeof addOrderDetailInput>
 
 export const deleteInput = z.object({ id })
+export const getOrderInput = z.object({ id })
+export type GetOrderInput = z.infer<typeof getOrderInput>
 export const deletedSchema = z.object({ id })
 
 /** Identity and correlation data the service forwards to other services (see `callContextOf`). */
@@ -74,6 +76,8 @@ export interface CallerInfo {
 export interface OrdersService {
   /** Stores the order with its details in one transaction; the customer and the delivery address are checked in customer-service. */
   create(input: CreateOrderInput, caller: CallerInfo): Promise<Order>
+  /** NOT_FOUND when the order does not exist or is deleted. */
+  get(id: number): Promise<Order>
   /** Active orders with their details, newest first (two queries, no N+1). */
   list(input: ListOrdersInput): Promise<Order[]>
   /** Soft delete; idempotent. */

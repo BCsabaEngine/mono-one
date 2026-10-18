@@ -100,6 +100,22 @@ export class OrdersServiceImpl implements OrdersService {
     return created
   }
 
+  async get(id: number): Promise<Order> {
+    const [row] = await this.db
+      .select()
+      .from(order)
+      .where(and(eq(order.id, id), isNull(order.deletedAt)))
+    if (!row) throw notFound('Order', String(id))
+
+    const details = await this.db
+      .select()
+      .from(orderDetail)
+      .where(eq(orderDetail.orderId, id))
+      .orderBy(orderDetail.id)
+
+    return { ...row, ...toStamps(row), details: details.map(toDetail) }
+  }
+
   async list({ customerId, limit, offset }: ListOrdersInput): Promise<Order[]> {
     const rows = await this.db
       .select()

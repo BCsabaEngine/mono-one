@@ -11,10 +11,10 @@ Technical documentation (architecture, conventions, versions). Business document
 ```
 Browser ──tRPC──> web (SvelteKit 3: FE + BFF) ──tRPC/HTTP──> customer-service
                                               ──tRPC/HTTP──> order-service ──tRPC/HTTP──> customer-service
-                                              ──tRPC/HTTP──> document-service
+                                              ──tRPC/HTTP──> document-service ──tRPC/HTTP──> order-service, customer-service
                                               ──tRPC/HTTP──> system-service (users + permissions)
-order-service ──events.deliver (tRPC, instant, parallel)──> document-service, web
-core services ──> Postgres (one database each)        web ──> Redis (JWT storage only)
+order-service ──events.deliver (tRPC, instant, parallel)──> web
+customer/order/system-service ──> Postgres (one database each; document-service has none)        web ──> Redis (JWT storage only)
 ```
 
 - The browser only talks to `web`. The core services have no browseraccess and must stay on the private network (see Auth).
@@ -25,15 +25,15 @@ core services ──> Postgres (one database each)        web ──> Redis (JWT
 
 ### Apps and example endpoints
 
-| App                | Port | Procedure                                                                               | Notes                                                                                             |
-| ------------------ | ---- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `web`              | 3000 | `customers.get`, `orders.create`, `documents.get`, `live.orderPlaced` (SSE)             | proxies to the services; runs as exactly one instance                                             |
-| `customer-service` | 3001 | `customers.get/list/add/update/delete`, `addresses.*`, `contacts.*`                     | customers with addresses and contacts (see Customer service); `web` only forwards `customers.get` |
-| `order-service`    | 3002 | `orders.create/list/delete`, `orderDetails.add/delete`                                  | orders with details (see Order service); `web` only forwards `orders.create`                      |
-| `document-service` | 3003 | `documents.get`                                                                         | the document is created by the `order.placed` event                                               |
-| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete` | users + flat permissions (see System service); later runtime configs, tasks, calendar             |
+| App                | Port | Procedure                                                                                     | Notes                                                                                             |
+| ------------------ | ---- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `web`              | 3000 | `customers.get`, `orders.create`, `documents.generateOrderDocument`, `live.orderPlaced` (SSE) | proxies to the services; runs as exactly one instance                                             |
+| `customer-service` | 3001 | `customers.get/list/add/update/delete`, `addresses.*`, `contacts.*`                           | customers with addresses and contacts (see Customer service); `web` only forwards `customers.get` |
+| `order-service`    | 3002 | `orders.create/list/delete`, `orderDetails.add/delete`                                        | orders with details (see Order service); `web` only forwards `orders.create`                      |
+| `document-service` | 3003 | `documents.generateOrderDocument`                                                             | renders an order document on demand, no database (see Document service)                           |
+| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete`       | users + flat permissions (see System service); later runtime configs, tasks, calendar             |
 
-Directions: `web` -> all four, `order-service` -> `customer-service`. Demo data: `pnpm nx dev:seed <svc>` (customer-service, order-service, system-service; see Data rules). The web `auth.login` tRPC mutation is the real login (`users.auth`, then an unsigned JWT with `sub`, `permissions`, `email`, `name` stored in Redis; it sets the `sid` cookie through `ctx.cookies`); seeded starter user `hello@mono.hu` / `hello` (`pnpm nx dev:seed system-service`).
+Directions: `web` -> all four, `order-service` -> `customer-service`, `document-service` -> `order-service` and `customer-service`. Demo data: `pnpm nx dev:seed <svc>` (customer-service, order-service, system-service; see Data rules). The web `auth.login` tRPC mutation is the real login (`users.auth`, then an unsigned JWT with `sub`, `permissions`, `email`, `name` stored in Redis; it sets the `sid` cookie through `ctx.cookies`); seeded starter user `hello@mono.hu` / `hello` (`pnpm nx dev:seed system-service`).
 
 ## Stack
 
@@ -101,7 +101,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 ## Data rules
 
-- Each service owns its database (separate `DATABASE_URL`, optional `DB_SCHEMA`); no service reads another's tables and there are no cross-service foreign keys. Cross-service data goes through tRPC. One pg pool per service with a deliberate size.
+- Each service with data owns its database (`document-service` has none; separate `DATABASE_URL`, optional `DB_SCHEMA`); no service reads another's tables and there are no cross-service foreign keys. Cross-service data goes through tRPC. One pg pool per service with a deliberate size.
 - Each service keeps its Drizzle schema, migrations and one-line `drizzle.config.ts` in its own app. `drizzle.config.ts` imports `defineDrizzleConfig` by relative path because drizzle-kit ignores tsconfig paths.
 - No service has committed migrations during development: `pnpm dev:migrate` / `pnpm nx dev:migrate <svc>` (local only; not `nx migrate`, that is Nx's built-in upgrade command) runs `drizzle-kit push`. The migration runner stays for later (`libs/migrations`: advisory-locked, `__drizzle_migrations` in the same schema as the tables (`DB_SCHEMA`, default `public`); `node migrate.mjs` in the image, `pnpm nx db-generate <svc>`). When migrations come back: generate and commit the SQL per service, add a real `migrate` target running `src/migrate.ts` (`dev:migrate` stays the local push) and re-add the compose migrate jobs.
 - **Seed data is code, never a migration.** `pnpm dev:seed` / `pnpm nx dev:seed <svc>` (tsx, not bundled into the images) wipes the service's tables and re-inserts deterministic demo rows; it refuses `NODE_ENV=production`. Seed ids come from `libs/seedIds.ts` (`seedId(entity, n)` / `seedIds(entity)`, n = 1..100, one UUID namespace per entity) for UUID-keyed entities; integer-identity services (system, customer, order) restart their identities at 1 and seed 1..100, so an order's `customerId` n refers to customer n without reading the other database. New entity: add its prefix there; new seeded service: `src/db/seed.ts` (`seed(db)`) + `src/seed.ts` (`seedService`) + a `dev:seed` target.
@@ -139,14 +139,20 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 ## Order service
 
-- `order-service` owns `order` and `order_detail` (database `mono_order`); router namespaces `orders` (`create`, `list`, `delete`) and `orderDetails` (`add`, `delete`), all needing an identity.
+- `order-service` owns `order` and `order_detail` (database `mono_order`); router namespaces `orders` (`create`, `get`, `list`, `delete`) and `orderDetails` (`add`, `delete`), all needing an identity.
 - `order`: `customer_id`, `title`, `comment`, `delivery_address_id` (an address of that customer in customer-service; no cross-service foreign key, so `orders.create` checks it against `customers.get` and answers BAD_REQUEST otherwise), soft delete (`deleted_at`). `order_detail`: `order_id` (FK, cascade), `product_code` and `product_name` (copied text, not a product reference), `quantity`, `unit_price`, `net_value` (= quantity * unit price, always set by the service); hard delete, so `businessTimestampColumns`. Money is in minor units (`bigint` in `mode: 'number'`); the contract caps quantity, unit price and the detail count so every sum stays a safe integer.
-- `orders.create` stores the order and all its details in one transaction (at least one detail), then publishes `order.placed` with `orderId`, `customerId` and `totalCents` (sum of the net values). `orders.list` returns active orders newest first with their details in exactly two selects (orders page, then `order_id in (...)`), optional `customerId` filter, `limit` (default 50, max 100) / `offset`. `orders.delete` is a soft delete, idempotent (children stay). `orderDetails.add` / `delete` are NOT_FOUND when the order is missing or soft-deleted and touch the order's `updated_at`; deleting the last detail is allowed.
+- `orders.create` stores the order and all its details in one transaction (at least one detail), then publishes `order.placed` with `orderId`, `customerId` and `totalCents` (sum of the net values). `orders.get` returns one active order with its details (NOT_FOUND when missing or soft-deleted). `orders.list` returns active orders newest first with their details in exactly two selects (orders page, then `order_id in (...)`), optional `customerId` filter, `limit` (default 50, max 100) / `offset`. `orders.delete` is a soft delete, idempotent (children stay). `orderDetails.add` / `delete` are NOT_FOUND when the order is missing or soft-deleted and touch the order's `updated_at`; deleting the last detail is allowed.
 - Not exposed through `web` beyond `orders.create`. The seed creates 100 orders (order n for customer n, delivered to address n, which is customer-service's seeded hq address) with two details each. An existing `mono_order` database still has the old `orders` table: drop and recreate it (or the whole database) before `pnpm dev:migrate`.
+
+## Document service
+
+- `document-service` has no database, no schema, no migrations and no seed (config extends `commonEnvSchema`, `/readyz` is ready once it listens, its `build` target has no `migrate.ts` entry point or migration assets, its compose entry has no `depends_on` Postgres). It owns and subscribes to no events (empty `createEventsRouter`).
+- `documents.generateOrderDocument` (query, needs the `document.read` permission): input `{ orderId }`, output `{ orderId, filename, contentType: 'text/markdown', content }`. It calls `orders.get` on order-service and `customers.get` on customer-service with the caller's JWT, trace id and call chain (`callContextOf`), then renders with the pure `renderOrderMarkdown` (`services/orderMarkdown.ts`). A downstream NOT_FOUND (order missing or soft-deleted, customer unknown) answers NOT_FOUND; other downstream errors keep their code (`fromClientError`). A soft-deleted customer and a delivery address that is no longer active still render (the address as "no longer available").
+- Nothing is stored: every call renders again. PDF comes later as an additional `contentType` (with `content` as base64) on the same procedure; keep API changes additive. The admin UI will call it through `web` (the `documents.generateOrderDocument` forward exists already).
 
 ## Events (no bus, no persistence, no retry)
 
-- Each event type has exactly one owning service: it defines the schema in its own file in `libs/events` (e.g. `order.ts`, `defineEvent`; CODEOWNERS gives that file to the owning team), is the only sender, and never subscribes to its own events. `@events/registry` holds the `EVENTS` map (owner, schema, subscribers) and the derived types `EventsOwnedBy<S>` / `EventsFor<S>`; a type check fails if an owner subscribes to itself. Current event: `order.placed` (owner `order-service`; subscribers `document-service`, `web`). `system-service` is a known `ServiceId` but owns and subscribes to nothing yet.
+- Each event type has exactly one owning service: it defines the schema in its own file in `libs/events` (e.g. `order.ts`, `defineEvent`; CODEOWNERS gives that file to the owning team), is the only sender, and never subscribes to its own events. `@events/registry` holds the `EVENTS` map (owner, schema, subscribers) and the derived types `EventsOwnedBy<S>` / `EventsFor<S>`; a type check fails if an owner subscribes to itself. Current event: `order.placed` (owner `order-service`; subscriber `web`). `system-service` and `document-service` are known `ServiceId`s but own and subscribe to nothing.
 - `createPublisher(serviceId)` accepts only events the service owns (compile error otherwise), validates against the owner's schema, then calls every subscriber's `events.deliver` instantly and in parallel with a short timeout. It returns `{ delivered, failed }` and logs failures; counters via `failedDeliveries()`.
 - `createEventsRouter(serviceId, handlers)` mounts `events.deliver` on `/events`. The handler map is typed from the registry (exactly the subscribed events), every event is validated against the owner's schema, and `x-service-id` must equal the registered owner (a consistency check, not security).
 - Guarantees: best effort, at most once, unordered. Events are signals; the owner's database is the source of truth. Publish after the DB commit. Anything that must not be lost is a direct tRPC call whose result the caller checks. Avoid event cycles.
@@ -203,7 +209,7 @@ pnpm nx run-many -t build && docker compose up -d --build   # full stack in Dock
 ```
 
 - `pnpm test` / `pnpm test:force` use the same env var and `--output-style=stream` for the same reason. `pnpm dev` is `NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream` (`serve` is `continuous` in `nx.json`; `--output-style` keeps Nx out of the TUI and prefixes each line with the project). The env var is required: in a real terminal Nx otherwise runs each app in its own pseudo-terminal (raw mode, no carriage returns), which makes the interleaved output stair-step and garbled. `pnpm dev:migrate` is an `nx run-many -t dev:migrate`. `nx serve <app>` runs one app.
-- Config is env-driven and Zod-validated at startup (`.env.example` per app). Core services need `DATABASE_URL`; service URLs default to `localhost:300x`.
+- Config is env-driven and Zod-validated at startup (`.env.example` per app). Core services except `document-service` need `DATABASE_URL`; service URLs default to `localhost:300x`.
 
 ## Docker and CI
 
@@ -217,4 +223,4 @@ Callers depend on `*-api`, not on service apps, so internal service changes do n
 
 ## Not done yet
 
-Registry push in CI, husky/lint-staged, OpenTelemetry tracing, real service domains (customer, order and document services are examples).
+Registry push in CI, husky/lint-staged, OpenTelemetry tracing, real service domains (customer, order and document services are examples; the order document is a minimal markdown rendering).

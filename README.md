@@ -31,13 +31,13 @@ Services restart on source changes (`tsx watch`, libs included); `web` uses Vite
 
 ## Example endpoints
 
-| App              | tRPC procedure                                                                         | Notes                                                                                            |
-| ---------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| customer-service | `customers.get`                                                                        | query by id                                                                                      |
-| order-service    | `orders.create/list/delete`, `orderDetails.add/delete`                                 | orders with details; `create` checks the customer and delivery address, publishes `order.placed` |
-| document-service | `documents.get`                                                                        | the document is created by the `order.placed` event                                              |
-| system-service   | `users.get`, `getMany`, `auth`, `add`, `update`, `delete`                              | users + permissions, soft delete                                                                 |
-| web (browser)    | `customers.get`, `orders.create`, `documents.get`, `users.*`, `live.orderPlaced` (SSE) | proxies to the services                                                                          |
+| App              | tRPC procedure                                                                                           | Notes                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| customer-service | `customers.get`                                                                                          | query by id                                                                                      |
+| order-service    | `orders.create/get/list/delete`, `orderDetails.add/delete`                                               | orders with details; `create` checks the customer and delivery address, publishes `order.placed` |
+| document-service | `documents.generateOrderDocument`                                                                        | renders the order + customer as a markdown file on demand; no database                           |
+| system-service   | `users.get`, `getMany`, `auth`, `add`, `update`, `delete`                                                | users + permissions, soft delete                                                                 |
+| web (browser)    | `customers.get`, `orders.create`, `documents.generateOrderDocument`, `users.*`, `live.orderPlaced` (SSE) | proxies to the services                                                                          |
 
 ## Targets
 

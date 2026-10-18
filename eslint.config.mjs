@@ -9,7 +9,12 @@ const scopes = {
   'scope:system': ['scope:system', 'scope:events'],
   'scope:customer': ['scope:customer', 'scope:events'],
   'scope:order': ['scope:order', 'scope:customer', 'scope:events'],
-  'scope:document': ['scope:document', 'scope:order', 'scope:events'],
+  'scope:document': [
+    'scope:document',
+    'scope:customer',
+    'scope:order',
+    'scope:events'
+  ],
   'scope:web': [
     'scope:web',
     'scope:customer',

@@ -24,13 +24,11 @@
 			details: [{ productCode: 'P-0001', productName: 'Product 1', quantity: 1, unitPrice }]
 		})
 	const placeOrder = () => run('orders.create', () => newOrder('Demo order', 1990))
-	const getDocument = () =>
-		run('documents.get', async () => {
+	const orderDocument = () =>
+		run('documents.generateOrderDocument', async () => {
 			const order = await newOrder('Demo order with document', 500)
 
-			await new Promise(r => setTimeout(r, 300)) // the document is created by the order.placed event
-
-			return trpc.documents.get.query({ orderId: order.id })
+			return trpc.documents.generateOrderDocument.query({ orderId: order.id })
 		})
 
 	onMount(() => {
@@ -50,7 +48,7 @@
 		<button onclick={getUser}>users.get</button>
 		<button onclick={getCustomer}>customers.get</button>
 		<button onclick={placeOrder}>orders.create</button>
-		<button onclick={getDocument}>place order, then documents.get</button>
+		<button onclick={orderDocument}>place order, then documents.generateOrderDocument</button>
 	</div>
 	<pre>{log.join('\n')}</pre>
 </main>

@@ -6,6 +6,7 @@ import {
   createOrderInput,
   deleteInput,
   deletedSchema,
+  getOrderInput,
   listOrdersInput,
   orderDetailSchema,
   orderSchema
@@ -28,6 +29,11 @@ export const appRouter = router({
       .mutation(({ input, ctx }) =>
         ctx.services.orders.create(input, callContextOf(ctx))
       ),
+
+    get: authed
+      .input(getOrderInput)
+      .output(orderSchema)
+      .query(({ input, ctx }) => ctx.services.orders.get(input.id)),
 
     list: authed
       .input(listOrdersInput)

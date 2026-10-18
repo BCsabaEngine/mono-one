@@ -1,7 +1,7 @@
 import { on } from 'node:events'
 import { createTRPC, fromClientError, requireIdentity, unsignedJwt } from '@lib/trpc'
 import { getCustomerInput } from '@api/customer'
-import { getDocumentInput } from '@api/document'
+import { generateOrderDocumentInput } from '@api/document'
 import { createOrderInput } from '@api/order'
 import { addUserInput, authUserInput, deleteUserInput, getUserInput, getUsersInput, updateUserInput } from '@api/system'
 import { bus } from '../bus'
@@ -55,10 +55,10 @@ export const webRouter = router({
 	}),
 
 	documents: router({
-		get: authed
-			.input(getDocumentInput)
+		generateOrderDocument: authed
+			.input(generateOrderDocumentInput)
 			.query(({ input, ctx }) =>
-				ctx.services.document.documents.get.query(input, callContext(ctx)).catch(fromClientError)
+				ctx.services.document.documents.generateOrderDocument.query(input, callContext(ctx)).catch(fromClientError)
 			)
 	}),
 

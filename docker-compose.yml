@@ -55,14 +55,10 @@ services:
         <<: *service-urls,
         DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_order'
       }
-  document-service:
-    <<: *db-service
+  document-service: # no database
     build: { context: ., dockerfile: apps/document-service/Dockerfile }
-    environment:
-      {
-        <<: *service-urls,
-        DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_document'
-      }
+    environment: *service-urls
+    restart: unless-stopped
 
   # no migrate jobs yet: no service has committed migrations during development (CLAUDE.md), so the tables
   # come from `pnpm dev:migrate` (drizzle-kit push); generate migrations and add the jobs before deploying

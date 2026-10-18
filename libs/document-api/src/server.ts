@@ -1,6 +1,6 @@
-import { createTRPC, requireIdentity } from '@lib/trpc'
+import { callContextOf, createTRPC, requirePermission } from '@lib/trpc'
 import type { BaseContext } from '@lib/trpc'
-import { documentSchema, getDocumentInput } from './contract'
+import { generateOrderDocumentInput, generatedDocumentSchema } from './contract'
 import type { DocumentsService } from './contract'
 
 export interface DocumentContext extends BaseContext {
@@ -9,12 +9,21 @@ export interface DocumentContext extends BaseContext {
 
 const { router, procedure } = createTRPC<DocumentContext>()
 
+const reader = procedure.use(
+  ({ ctx, next }) => (requirePermission(ctx, 'document.read'), next())
+)
+
 export const appRouter = router({
   documents: router({
-    get: procedure
-      .input(getDocumentInput)
-      .output(documentSchema)
-      .query(({ input, ctx }) => (requireIdentity(ctx), ctx.services.documents.getByOrder(input.orderId)))
+    generateOrderDocument: reader
+      .input(generateOrderDocumentInput)
+      .output(generatedDocumentSchema)
+      .query(({ input, ctx }) =>
+        ctx.services.documents.generateOrderDocument(
+          input.orderId,
+          callContextOf(ctx)
+        )
+      )
   })
 })
 
