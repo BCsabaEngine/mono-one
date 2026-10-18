@@ -1,4 +1,8 @@
-# mono-one
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## mono-one
 
 Technical documentation (architecture, conventions, versions). Business documentation lives in `docs/`. Keep this file current when the architecture, a rule or a pinned version changes.
 
@@ -50,7 +54,7 @@ Pinned exactly (`save-exact`, committed `pnpm-lock.yaml`, `.node-version`, Docke
 | ----------------------------------- | ---------------------------------- | ----------------------------------------------------- |
 | Node                                | 24.21.0                            | `.node-version`, `engines`, `node:24.21.0-slim`       |
 | pnpm                                | 12.14.0                            | via Corepack (`packageManager`)                       |
-| Nx and `@nx/*`                      | 23.3.0                             | all on one version                                    |
+| Nx and `@nx/*`                      | 23.3.0                             | all on one version (incl. `@nx/eslint`, `@nx/vitest`) |
 | TypeScript                          | 6.0.3                              | not 7: SvelteKit 3 requires 6 and Nx needs the TS API |
 | `@types/node`                       | 24.19.2                            | matches the Node 24 runtime                           |
 | SvelteKit / Svelte / Vite           | 3.1.0 / 5.57.2 / 8.3.4             |                                                       |
@@ -127,8 +131,8 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 - Prefer Nx over custom scripts: use targets, executors, `targetDefaults` and `nx run-many` before writing a custom script (there is no `tools/` directory); a script needs a reason Nx cannot cover.
 - One root `package.json`, one `pnpm-lock.yaml`, no pnpm workspaces. `pnpm-workspace.yaml` only holds `allowBuilds` (pnpm 12 no longer reads the `pnpm` field) and declares no packages. `.npmrc`: `save-exact=true`. The only other `package.json` is `apps/web/package.json`.
-- Nx needs `@nx/js` to build project-graph edges from TS imports. Targets are `nx:run-commands` (and `@nx/esbuild:esbuild` for service `build`) defined in `nx.json` `targetDefaults` (`typecheck`, `lint`, `test`, `serve`, the esbuild defaults) and per-project `project.json` (`serve`, `build`, `migrate`, `db-generate`, `docker-build`). `docker-build` depends on `build`.
-- The root `lint`/`typecheck`/`test`/`build` scripts pass `--output-style=static` so Nx prints task logs inline instead of the TUI or a summary.
+- Nx needs `@nx/js` to build project-graph edges from TS imports. `lint` and `test` are inferred by the `@nx/eslint/plugin` and `@nx/vitest` plugins in `nx.json` `plugins` (from the root `eslint.config.mjs` and each `vitest.config.ts`; a project without a vitest config has no `test` target, `apps/web` is excluded from the vitest plugin because loading its SvelteKit `vite.config.ts` from the workspace root fails; the `test` default only forces `vitest run` so it never enters watch mode; `test-ci` is deliberately off, since atomized per-file targets would start one Testcontainers Postgres per file). The other targets are `nx:run-commands` (and `@nx/esbuild:esbuild` for service `build`) defined in `nx.json` `targetDefaults` (`typecheck`, `serve`, the esbuild defaults) and per-project `project.json` (`serve`, `build`, `migrate`, `db-generate`, `docker-build`). `docker-build` depends on `build`.
+- `migrate` is the only root script that passes `--output-style=static` (Nx prints task logs inline instead of the TUI); `dev` uses `stream`.
 - One root ESLint flat config covers everything, including the Svelte rules scoped to `apps/web` (`eslint-plugin-svelte`). Prettier: root config for services and libs; `apps/web` has its own (`prettier-plugin-svelte`, tabs), the nearest config wins.
 - Type-only imports are always top-level `import type { X }`, never `import { type X }` (`consistent-type-imports` with `separate-type-imports`, `no-import-type-side-effects`, and `no-restricted-syntax` banning inline `type` specifiers). `verbatimModuleSyntax` is on.
 - Code style: compact, arrow functions, no boilerplate; services single quotes, no semicolons; `apps/web` uses tabs.
@@ -139,13 +143,16 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 corepack enable && pnpm install
 pnpm dev:infra          # postgres + redis in Docker
 pnpm env:init           # creates missing apps/*/.env from .env.example (first run only)
-pnpm migrate            # nx run-many -t migrate, sequential (run after dev:infra and after pulling schema changes)
+pnpm migrate            # nx run-many -t migrate --parallel=4 (run after dev:infra and after pulling schema changes)
 pnpm dev                # nx run-many -t serve: web + services with reload, prefixed output (no migrations)
-pnpm all                # lint + typecheck + build (no tests)
-pnpm lint               # nx lint of all projects + eslint for the @lib helpers (not an Nx project)
-pnpm nx run-many -t typecheck test build   # before finishing any change, together with pnpm lint (test needs Docker)
+pnpm all                # format + lint (both write/--fix) + typecheck + build (no tests); use format:check/lint:check for a read-only run
+pnpm lint               # eslint --fix on all projects + the @lib helpers (not an Nx project)
+pnpm lint:check         # same without --fix (what CI runs)
+pnpm format             # nx format:write (Prettier)
+pnpm format:check       # nx format:check (what CI runs)
+pnpm nx run-many -t typecheck test build   # before finishing any change, together with `pnpm format` and `pnpm lint` (test needs Docker)
+pnpm nx test <project> -- <file-filter> -t "<test name>"   # single test file/case; args after `--` go to `vitest run` (service tests need Docker)
 pnpm nx affected -t lint typecheck test --base=main
-pnpm nx format:check
 pnpm nx graph
 pnpm nx db-generate <svc>
 pnpm nx run-many -t build && docker compose up -d --build   # full stack in Docker, web on :3000
@@ -158,7 +165,7 @@ pnpm nx run-many -t build && docker compose up -d --build   # full stack in Dock
 
 - Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) and `pino-pretty` (dev only) stay external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
 - `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, one-off migration jobs, the three services and `web`.
-- CI (`.github/workflows/ci.yml`, Node from `.node-version`): `nx format:check`, `pnpm lint` (nx lint + @lib helpers), `nx run-many -t typecheck test`, `build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
+- CI (`.github/workflows/ci.yml`, Node from `.node-version`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test`, `build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
 
 ## Affected builds
 

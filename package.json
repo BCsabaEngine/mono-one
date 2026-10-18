@@ -12,11 +12,14 @@
     "dev:infra": "docker compose up -d postgres redis",
     "migrate": "nx run-many -t migrate --parallel=4 --output-style=static",
     "graph": "nx graph",
-    "lint": "nx run-many -t lint && eslint libs/*.ts libs/trpc libs/migrations",
+    "lint": "nx run-many -t lint -- --fix && eslint --fix libs/*.ts libs/trpc libs/migrations",
+    "lint:check": "nx run-many -t lint && eslint libs/*.ts libs/trpc libs/migrations",
+    "format": "nx format:write",
+    "format:check": "nx format:check",
     "typecheck": "nx run-many -t typecheck",
     "test": "nx run-many -t test",
     "build": "nx run-many -t build",
-    "all": "pnpm lint && pnpm typecheck && pnpm build"
+    "all": "pnpm format && pnpm lint && pnpm typecheck && pnpm build"
   },
   "dependencies": {
     "@trpc/client": "11.19.0",
@@ -31,8 +34,10 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@nx/esbuild": "23.3.0",
+    "@nx/eslint": "23.3.0",
     "@nx/eslint-plugin": "23.3.0",
     "@nx/js": "23.3.0",
+    "@nx/vitest": "23.3.0",
     "@sveltejs/adapter-node": "6.0.0",
     "@sveltejs/kit": "3.1.0",
     "@sveltejs/vite-plugin-svelte": "7.3.1",

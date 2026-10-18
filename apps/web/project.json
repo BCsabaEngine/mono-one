@@ -5,7 +5,6 @@
 	"sourceRoot": "apps/web/src",
 	"tags": ["type:app", "scope:web"],
 	"targets": {
-		"lint": {},
 		"typecheck": {
 			"executor": "nx:run-commands",
 			"options": { "command": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json", "cwd": "apps/web" }

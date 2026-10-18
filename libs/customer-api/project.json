@@ -4,5 +4,5 @@
   "projectType": "library",
   "sourceRoot": "libs/customer-api/src",
   "tags": ["type:api", "scope:customer"],
-  "targets": { "typecheck": {}, "lint": {} }
+  "targets": { "typecheck": {} }
 }

@@ -2,7 +2,11 @@
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
-    "production": ["default", "!{projectRoot}/**/*.spec.ts", "!{projectRoot}/**/*.test.ts"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/*.spec.ts",
+      "!{projectRoot}/**/*.test.ts"
+    ],
     "sharedGlobals": [
       "{workspaceRoot}/tsconfig.base.json",
       "{workspaceRoot}/libs/*.ts",
@@ -12,6 +16,14 @@
       "{workspaceRoot}/eslint.config.mjs"
     ]
   },
+  "plugins": [
+    { "plugin": "@nx/eslint/plugin", "options": { "targetName": "lint" } },
+    {
+      "plugin": "@nx/vitest",
+      "options": { "testTargetName": "test" },
+      "exclude": ["apps/web/**"]
+    }
+  ],
   "targetDefaults": {
     "build": {
       "dependsOn": ["^build"],
@@ -26,20 +38,10 @@
       "dependsOn": ["^typecheck"],
       "cache": true
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "eslint {projectRoot}"
-      },
-      "cache": true
-    },
     "test": {
-      "executor": "nx:run-commands",
       "options": {
-        "command": "vitest run --root {projectRoot} --passWithNoTests"
-      },
-      "inputs": ["default", "^production"],
-      "cache": true
+        "command": "vitest run"
+      }
     },
     "@nx/esbuild:esbuild": {
       "outputs": ["{options.outputPath}"],
@@ -56,7 +58,13 @@
         "sourcemap": true,
         "skipTypeCheck": true,
         "external": ["pg-native", "pino-pretty"],
-        "assets": [{ "input": "{projectRoot}/src/db/migrations", "glob": "**/*", "output": "migrations" }],
+        "assets": [
+          {
+            "input": "{projectRoot}/src/db/migrations",
+            "glob": "**/*",
+            "output": "migrations"
+          }
+        ],
         "esbuildOptions": {
           "outExtension": { ".js": ".mjs" },
           "banner": {

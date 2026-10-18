@@ -6,8 +6,6 @@
   "tags": ["type:app", "scope:customer"],
   "targets": {
     "typecheck": {},
-    "lint": {},
-    "test": {},
     "serve": {
       "executor": "nx:run-commands",
       "options": {
@@ -25,11 +23,15 @@
     },
     "db-generate": {
       "executor": "nx:run-commands",
-      "options": { "command": "drizzle-kit generate --config apps/customer-service/src/db/drizzle.config.ts" }
+      "options": {
+        "command": "drizzle-kit generate --config apps/customer-service/src/db/drizzle.config.ts"
+      }
     },
     "docker-build": {
       "executor": "nx:run-commands",
-      "options": { "command": "docker build -f apps/customer-service/Dockerfile -t mono-one/customer-service:latest ." }
+      "options": {
+        "command": "docker build -f apps/customer-service/Dockerfile -t mono-one/customer-service:latest ."
+      }
     }
   }
 }

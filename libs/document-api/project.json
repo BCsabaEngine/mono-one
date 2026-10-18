@@ -4,5 +4,5 @@
   "projectType": "library",
   "sourceRoot": "libs/document-api/src",
   "tags": ["type:api", "scope:document"],
-  "targets": { "typecheck": {}, "lint": {} }
+  "targets": { "typecheck": {} }
 }

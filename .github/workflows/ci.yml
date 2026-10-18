@@ -18,8 +18,8 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm nx format:check
-      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm lint:check
       - run: pnpm nx run-many -t typecheck test
       - run: pnpm nx run-many -t build
       # - run: pnpm nx run-many -t docker-build

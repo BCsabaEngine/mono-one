@@ -4,5 +4,5 @@
   "projectType": "library",
   "sourceRoot": "libs/events",
   "tags": ["type:events", "scope:events"],
-  "targets": { "typecheck": {}, "lint": {}, "test": {} }
+  "targets": { "typecheck": {} }
 }

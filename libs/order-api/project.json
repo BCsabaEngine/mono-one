@@ -4,5 +4,5 @@
   "projectType": "library",
   "sourceRoot": "libs/order-api/src",
   "tags": ["type:api", "scope:order"],
-  "targets": { "typecheck": {}, "lint": {} }
+  "targets": { "typecheck": {} }
 }
