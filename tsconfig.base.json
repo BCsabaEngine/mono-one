@@ -1,6 +1,10 @@
 {
-  "extends": "./tsconfig.paths.json",
   "compilerOptions": {
+    "paths": {
+      "@lib/*": ["./libs/*"],
+      "@api/*": ["./libs/*-api/src/index.ts"],
+      "@events/*": ["./libs/events/*.ts"]
+    },
     "target": "es2023",
     "lib": ["es2023"],
     "module": "esnext",

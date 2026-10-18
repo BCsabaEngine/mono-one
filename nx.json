@@ -5,13 +5,11 @@
     "production": ["default", "!{projectRoot}/**/*.spec.ts", "!{projectRoot}/**/*.test.ts"],
     "sharedGlobals": [
       "{workspaceRoot}/tsconfig.base.json",
-      "{workspaceRoot}/tsconfig.paths.json",
       "{workspaceRoot}/libs/*.ts",
       "{workspaceRoot}/libs/trpc/**/*",
       "{workspaceRoot}/libs/migrations/**/*",
       "{workspaceRoot}/package.json",
-      "{workspaceRoot}/eslint.config.mjs",
-      "{workspaceRoot}/tools/**/*"
+      "{workspaceRoot}/eslint.config.mjs"
     ]
   },
   "targetDefaults": {
@@ -42,6 +40,33 @@
       },
       "inputs": ["default", "^production"],
       "cache": true
+    },
+    "@nx/esbuild:esbuild": {
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "{projectRoot}/src/main.ts",
+        "additionalEntryPoints": ["{projectRoot}/src/migrate.ts"],
+        "outputPath": "dist/{projectRoot}",
+        "tsConfig": "{projectRoot}/tsconfig.json",
+        "platform": "node",
+        "target": "node24",
+        "format": ["esm"],
+        "bundle": true,
+        "thirdParty": true,
+        "sourcemap": true,
+        "skipTypeCheck": true,
+        "external": ["pg-native", "pino-pretty"],
+        "assets": [{ "input": "{projectRoot}/src/db/migrations", "glob": "**/*", "output": "migrations" }],
+        "esbuildOptions": {
+          "outExtension": { ".js": ".mjs" },
+          "banner": {
+            "js": "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"
+          }
+        }
+      }
+    },
+    "serve": {
+      "continuous": true
     },
     "docker-build": {
       "dependsOn": ["build"]

@@ -5,4 +5,4 @@ ENV NODE_ENV=production MIGRATIONS_DIR=/app/migrations PORT=3002
 COPY dist/apps/order-service ./
 USER node
 EXPOSE 3002
-CMD ["node", "main.js"]
+CMD ["node", "main.mjs"]

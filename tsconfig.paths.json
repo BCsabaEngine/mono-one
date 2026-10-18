@@ -1,9 +1,0 @@
-{
-  "compilerOptions": {
-    "paths": {
-      "@lib/*": ["./libs/*"],
-      "@api/*": ["./libs/*-api/src/index.ts"],
-      "@events/*": ["./libs/events/*.ts"]
-    }
-  }
-}

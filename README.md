@@ -21,7 +21,9 @@ Open http://localhost:3000, press "Dev login", then call the endpoints. Only `we
 
 ```bash
 pnpm dev:infra   # postgres + redis in Docker
-pnpm dev         # creates missing .env files, migrates, then serves web + the 3 services with reload
+pnpm env:init    # creates missing .env files from .env.example (first run only)
+pnpm migrate     # applies the migrations of all services
+pnpm dev         # serves web + the 3 services with reload
 ```
 
 Services restart on source changes (`tsx watch`, libs included); `web` uses Vite HMR. `web` is on http://localhost:3000, services on 3001-3003. To run a single app: `pnpm nx serve <app>`.

@@ -7,9 +7,10 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "dev": "node tools/dev.mjs",
+    "dev": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream",
+    "env:init": "for f in apps/*/.env.example; do [ -e \"${f%.example}\" ] || cp \"$f\" \"${f%.example}\"; done",
     "dev:infra": "docker compose up -d postgres redis",
-    "migrate": "node tools/migrate.mjs",
+    "migrate": "nx run-many -t migrate --parallel=4 --output-style=static",
     "graph": "nx graph",
     "lint": "nx run-many -t lint && eslint libs/*.ts libs/trpc libs/migrations",
     "typecheck": "nx run-many -t typecheck",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@nx/esbuild": "23.3.0",
     "@nx/eslint-plugin": "23.3.0",
     "@nx/js": "23.3.0",
     "@sveltejs/adapter-node": "6.0.0",

@@ -1,5 +1,12 @@
 {
-	"extends": ["$app/tsconfig", "../../tsconfig.paths.json"],
-	"compilerOptions": { "strict": true },
+	"extends": "$app/tsconfig",
+	"compilerOptions": {
+		"strict": true,
+		"paths": {
+			"@lib/*": ["../../libs/*"],
+			"@api/*": ["../../libs/*-api/src/index.ts"],
+			"@events/*": ["../../libs/events/*.ts"]
+		}
+	},
 	"include": ["src", "vite.config.ts"]
 }

@@ -15,9 +15,7 @@
       }
     },
     "build": {
-      "executor": "nx:run-commands",
-      "outputs": ["{workspaceRoot}/dist/apps/customer-service"],
-      "options": { "command": "node tools/build-app.mjs customer-service" }
+      "executor": "@nx/esbuild:esbuild"
     },
     "migrate": {
       "executor": "nx:run-commands",

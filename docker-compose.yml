@@ -29,18 +29,18 @@ services:
   # one-off migration jobs (run as a separate step, not on service start)
   customer-migrate:
     build: { context: ., dockerfile: apps/customer-service/Dockerfile }
-    command: ['node', 'migrate.js']
+    command: ['node', 'migrate.mjs']
     environment:
       { SERVICE_ID: customer-service, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/customer_db' }
     depends_on: { postgres: { condition: service_healthy } }
   order-migrate:
     build: { context: ., dockerfile: apps/order-service/Dockerfile }
-    command: ['node', 'migrate.js']
+    command: ['node', 'migrate.mjs']
     environment: { SERVICE_ID: order-service, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/order_db' }
     depends_on: { postgres: { condition: service_healthy } }
   document-migrate:
     build: { context: ., dockerfile: apps/document-service/Dockerfile }
-    command: ['node', 'migrate.js']
+    command: ['node', 'migrate.mjs']
     environment:
       { SERVICE_ID: document-service, DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/document_db' }
     depends_on: { postgres: { condition: service_healthy } }

@@ -40,7 +40,7 @@ Directions: `web` -> all three, `order-service` -> `customer-service`. Demo data
 | Redis                         | `web` only, JWT storage (`jwt:<sid>`, TTL = token lifetime). Not used for events or queues                    |
 | Validation / config / logging | Zod 4, Zod-validated env (fail fast), pino                                                                    |
 | Tests                         | Vitest + Testcontainers (real Postgres)                                                                       |
-| Lint / format                 | ESLint 10 flat config, Prettier; `apps/web` has its own configs                                               |
+| Lint / format                 | ESLint 10 flat config (one root file), Prettier; `apps/web` has its own Prettier config                       |
 
 ### Versions
 
@@ -66,19 +66,18 @@ libs/
   customer-api  order-api  document-api                  contract.ts (Zod schemas, DTOs, service "port" interfaces) + server.ts (tRPC router, AppRouter type)
   config.ts logging.ts errors.ts db.ts testing.ts  trpc/ migrations/   shared helpers, imported as @lib/<name>; not an Nx project
   events/   one Nx project, imported as @events/<file>: contract.ts (defineEvent, envelope, ServiceId, EventsRouter) registry.ts (EVENTS map) client.ts (publisher, events router) + one file per owning service (order.ts)
-tools/   eslint/boundaries.mjs, build-app.mjs, dev.mjs, migrate.mjs, apps.mjs (shared helpers)
 ```
 
-- Libs are source-consumed (not buildable); path mappings live in `tsconfig.paths.json` (shared by `tsconfig.base.json` and `apps/web/tsconfig.json`). No `baseUrl` (deprecated in TS 6); entries start with `./`.
+- Libs are source-consumed (not buildable); path mappings live in `tsconfig.base.json`; `apps/web/tsconfig.json` repeats them (relative to itself) because it extends `$app/tsconfig`, not the base, so a new alias goes into both files. No `baseUrl` (deprecated in TS 6); entries start with `./`.
 - `*-api` libs hold the contract (`contract.ts`) and the router (`server.ts`) and have one entry point, `@api/<svc>` (`@api/*` maps to `libs/*-api/src/index.ts`; contract re-exports, `AppRouter` type, plus `appRouter` and the context type, which ESLint restricts to the owning service app). The router never imports from an app, so the Nx graph stays acyclic.
 - Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, request-ID child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `testing` (Testcontainers helpers, tests only).
 
-### Boundaries (`tools/eslint/boundaries.mjs`)
+### Boundaries (root `eslint.config.mjs`)
 
 - Tags: `type:app|api|events` and `scope:web|customer|order|document|events`. The `@lib` helpers have no tags: they are not an Nx project, so the rules do not check them.
 - apps may depend on api and events; api and events depend on no tagged lib (only on the untagged `@lib` helpers); nothing depends on an app.
 - Other apps import `@api/<svc>` types only (`consistent-type-imports`); `appRouter` and the context type are restricted to the owning app (`no-restricted-imports` with `importNames`). Callers never import another service's internals.
-- Both ESLint configs import the same boundaries module, so `web` cannot escape the rules.
+- One ESLint config covers services, libs and `apps/web` (Svelte rules are scoped to `apps/web`), so `web` cannot escape the rules.
 
 ## Per-service structure
 
@@ -98,7 +97,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 - Each service owns its database (separate `DATABASE_URL`, optional `DB_SCHEMA`); no service reads another's tables and there are no cross-service foreign keys. Cross-service data goes through tRPC. One pg pool per service with a deliberate size.
 - Each service keeps its Drizzle schema, migrations and one-line `drizzle.config.ts` in its own app. `drizzle.config.ts` imports `defineDrizzleConfig` by relative path because drizzle-kit ignores tsconfig paths.
-- Migrations run as a separate step (`nx migrate <svc>`, or `node migrate.js` in the image), under a Postgres advisory lock. Change the schema, then `pnpm nx db-generate <svc>` and commit the SQL.
+- Migrations run as a separate step (`pnpm nx run <svc>:migrate` (not `nx migrate`, that is Nx's built-in upgrade command), or `node migrate.mjs` in the image), under a Postgres advisory lock. Change the schema, then `pnpm nx db-generate <svc>` and commit the SQL.
 
 ## Events (no bus, no persistence, no retry)
 
@@ -118,7 +117,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 ## SvelteKit 3 specifics
 
-- Config is passed to the `sveltekit({...})` Vite plugin in `vite.config.ts` (no `svelte.config.js`). `tsconfig.json` extends `$app/tsconfig` (generated into `apps/web/node_modules/$app` by `svelte-kit sync`) plus `../../tsconfig.paths.json`.
+- Config is passed to the `sveltekit({...})` Vite plugin in `vite.config.ts` (no `svelte.config.js`). `tsconfig.json` extends `$app/tsconfig` (generated into `apps/web/node_modules/$app` by `svelte-kit sync`) and declares the `paths` aliases itself.
 - **`apps/web/package.json` exists** (`name`, `type`, `imports` only, no dependencies; every dependency is in the root file). SvelteKit 3 has no `files` option so the app must run with `apps/web` as cwd, and `adapter-node` reads `package.json` from there. Run web tooling through root binaries (`nx`, or `PATH=$PWD/node_modules/.bin`), not `pnpm exec` inside `apps/web`.
 - `#lib/*` maps to `apps/web/src/lib/*`; imports need the file extension (`#lib/server/session.ts`) because Node subpath patterns do no extension probing. `@nx/enforce-module-boundaries` allows `#lib`.
 - v3 API: `Handle` comes from `@sveltejs/kit/hooks`; `$env/*` became `$app/env/*` (web reads `process.env` through the shared Zod config); `$lib` is gone. Remote functions are experimental and unused: tRPC is the client-server layer.
@@ -126,11 +125,12 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 ## Tooling
 
+- Prefer Nx over custom scripts: use targets, executors, `targetDefaults` and `nx run-many` before writing a custom script (there is no `tools/` directory); a script needs a reason Nx cannot cover.
 - One root `package.json`, one `pnpm-lock.yaml`, no pnpm workspaces. `pnpm-workspace.yaml` only holds `allowBuilds` (pnpm 12 no longer reads the `pnpm` field) and declares no packages. `.npmrc`: `save-exact=true`. The only other `package.json` is `apps/web/package.json`.
-- Nx needs `@nx/js` to build project-graph edges from TS imports. Targets are plain `nx:run-commands` defined in `nx.json` `targetDefaults` (`typecheck`, `lint`, `test`) and per-project `project.json` (`serve`, `build`, `migrate`, `db-generate`, `docker-build`). `docker-build` depends on `build`.
+- Nx needs `@nx/js` to build project-graph edges from TS imports. Targets are `nx:run-commands` (and `@nx/esbuild:esbuild` for service `build`) defined in `nx.json` `targetDefaults` (`typecheck`, `lint`, `test`, `serve`, the esbuild defaults) and per-project `project.json` (`serve`, `build`, `migrate`, `db-generate`, `docker-build`). `docker-build` depends on `build`.
 - The root `lint`/`typecheck`/`test`/`build` scripts pass `--output-style=static` so Nx prints task logs inline instead of the TUI or a summary.
-- Root ESLint flat config and Prettier config cover services and libs; `apps/web` has its own (`eslint-plugin-svelte`, `prettier-plugin-svelte`, tabs). Prettier uses the nearest config.
-- Type-only imports are always top-level `import type { X }`, never `import { type X }` (`consistent-type-imports` with `separate-type-imports`, `no-import-type-side-effects`, and `no-restricted-syntax` banning inline `type` specifiers; both ESLint configs get them from `boundaries.mjs`). `verbatimModuleSyntax` is on.
+- One root ESLint flat config covers everything, including the Svelte rules scoped to `apps/web` (`eslint-plugin-svelte`). Prettier: root config for services and libs; `apps/web` has its own (`prettier-plugin-svelte`, tabs), the nearest config wins.
+- Type-only imports are always top-level `import type { X }`, never `import { type X }` (`consistent-type-imports` with `separate-type-imports`, `no-import-type-side-effects`, and `no-restricted-syntax` banning inline `type` specifiers). `verbatimModuleSyntax` is on.
 - Code style: compact, arrow functions, no boilerplate; services single quotes, no semicolons; `apps/web` uses tabs.
 
 ## Commands
@@ -138,8 +138,9 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 ```bash
 corepack enable && pnpm install
 pnpm dev:infra          # postgres + redis in Docker
-pnpm migrate            # applies migrations of all services (run after dev:infra and after pulling schema changes)
-pnpm dev                # creates missing .env files, serves web + services with reload (no migrations)
+pnpm env:init           # creates missing apps/*/.env from .env.example (first run only)
+pnpm migrate            # nx run-many -t migrate, sequential (run after dev:infra and after pulling schema changes)
+pnpm dev                # nx run-many -t serve: web + services with reload, prefixed output (no migrations)
 pnpm all                # lint + typecheck + build (no tests)
 pnpm lint               # nx lint of all projects + eslint for the @lib helpers (not an Nx project)
 pnpm nx run-many -t typecheck test build   # before finishing any change, together with pnpm lint (test needs Docker)
@@ -150,12 +151,12 @@ pnpm nx db-generate <svc>
 pnpm nx run-many -t build && docker compose up -d --build   # full stack in Docker, web on :3000
 ```
 
-- `pnpm dev` (`tools/dev.mjs`) starts the apps directly, not through `nx run-many`: every Nx task run switches the terminal to raw mode and garbles the interleaved output. It reads the `serve` command from each `project.json`; `pnpm migrate` (`tools/migrate.mjs`) reads the `migrate` commands the same way. `nx serve <app>` still works for one app.
+- `pnpm dev` is `NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream` (`serve` is `continuous` in `nx.json`; `--output-style` keeps Nx out of the TUI and prefixes each line with the project). The env var is required: in a real terminal Nx otherwise runs each app in its own pseudo-terminal (raw mode, no carriage returns), which makes the interleaved output stair-step and garbled. `pnpm migrate` is a sequential `nx run-many -t migrate`. `nx serve <app>` runs one app.
 - Config is env-driven and Zod-validated at startup (`.env.example` per app). Core services need `DATABASE_URL`; service URLs default to `localhost:300x`.
 
 ## Docker and CI
 
-- Every app is fully bundled (esbuild via `tools/build-app.mjs` for services; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) and `pino-pretty` (dev only) stay external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
+- Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) and `pino-pretty` (dev only) stay external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
 - `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, one-off migration jobs, the three services and `web`.
 - CI (`.github/workflows/ci.yml`, Node from `.node-version`): `nx format:check`, `pnpm lint` (nx lint + @lib helpers), `nx run-many -t typecheck test`, `build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
 
