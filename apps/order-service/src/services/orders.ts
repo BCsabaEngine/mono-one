@@ -1,7 +1,7 @@
 import { TRPCClientError } from '@trpc/client'
-import { notFound } from '@mono/shared-errors'
-import type { CallContext } from '@mono/shared-trpc'
-import type { CallerInfo, Order, OrdersService, PlaceOrderInput } from '@mono/order-contract'
+import { notFound } from '@lib/errors'
+import type { CallContext } from '@lib/trpc'
+import type { CallerInfo, Order, OrdersService, PlaceOrderInput } from '@api/order'
 import type { Cradle } from '../container'
 import { orders } from '../db/schema'
 

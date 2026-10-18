@@ -1,8 +1,0 @@
-{
-  "name": "events-contract",
-  "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "projectType": "library",
-  "sourceRoot": "libs/events-contract/src",
-  "tags": ["type:contract", "scope:shared"],
-  "targets": { "typecheck": {}, "lint": {} }
-}

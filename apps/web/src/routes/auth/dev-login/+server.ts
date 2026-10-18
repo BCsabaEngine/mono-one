@@ -1,5 +1,5 @@
 import { error, json } from '@sveltejs/kit'
-import { unsignedJwt } from '@mono/shared-trpc'
+import { unsignedJwt } from '@lib/trpc'
 import type { RequestHandler } from './$types'
 import { getConfig } from '#lib/server/config.ts'
 import { deleteJwt, saveJwt, SESSION_COOKIE } from '#lib/server/session.ts'

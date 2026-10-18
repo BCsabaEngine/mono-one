@@ -6,6 +6,9 @@
     "sharedGlobals": [
       "{workspaceRoot}/tsconfig.base.json",
       "{workspaceRoot}/tsconfig.paths.json",
+      "{workspaceRoot}/libs/*.ts",
+      "{workspaceRoot}/libs/trpc/**/*",
+      "{workspaceRoot}/libs/migrations/**/*",
       "{workspaceRoot}/package.json",
       "{workspaceRoot}/eslint.config.mjs",
       "{workspaceRoot}/tools/**/*"

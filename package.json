@@ -9,11 +9,13 @@
   "scripts": {
     "dev": "node tools/dev.mjs",
     "dev:infra": "docker compose up -d postgres redis",
+    "migrate": "node tools/migrate.mjs",
     "graph": "nx graph",
-    "lint": "nx run-many -t lint",
+    "lint": "nx run-many -t lint && eslint libs/*.ts libs/trpc libs/migrations",
     "typecheck": "nx run-many -t typecheck",
     "test": "nx run-many -t test",
-    "build": "nx run-many -t build"
+    "build": "nx run-many -t build",
+    "all": "pnpm lint && pnpm typecheck && pnpm build"
   },
   "dependencies": {
     "@trpc/client": "11.19.0",

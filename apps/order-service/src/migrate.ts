@@ -1,4 +1,4 @@
-import { migrateService } from '@mono/shared-migrations'
+import { migrateService } from '@lib/migrations'
 
 await migrateService({
   serviceId: 'order-service',

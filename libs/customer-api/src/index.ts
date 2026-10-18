@@ -1,2 +1,2 @@
-export type { AppRouter } from './server'
-export * from '@mono/customer-contract'
+export * from './server'
+export * from './contract'

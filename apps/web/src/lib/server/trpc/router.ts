@@ -1,10 +1,11 @@
 import { on } from 'node:events'
-import { createTRPC, fromClientError, requireIdentity } from '@mono/shared-trpc'
-import { getCustomerInput } from '@mono/customer-api'
-import { getDocumentInput } from '@mono/document-api'
-import { placeOrderInput } from '@mono/order-api'
+import { createTRPC, fromClientError, requireIdentity } from '@lib/trpc'
+import { getCustomerInput } from '@api/customer'
+import { getDocumentInput } from '@api/document'
+import { placeOrderInput } from '@api/order'
 import { bus } from '../bus'
-import { callContext, type WebContext } from './context'
+import { callContext } from './context'
+import type { WebContext } from './context'
 
 const { router, procedure } = createTRPC<WebContext>()
 const authed = procedure.use(({ ctx, next }) => (requireIdentity(ctx), next()))

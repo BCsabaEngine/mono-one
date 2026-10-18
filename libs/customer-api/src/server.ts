@@ -1,5 +1,7 @@
-import { createTRPC, requireIdentity, type BaseContext } from '@mono/shared-trpc'
-import { customerSchema, getCustomerInput, type CustomersService } from '@mono/customer-contract'
+import { createTRPC, requireIdentity } from '@lib/trpc'
+import type { BaseContext } from '@lib/trpc'
+import { customerSchema, getCustomerInput } from './contract'
+import type { CustomersService } from './contract'
 
 export interface CustomerContext extends BaseContext {
   services: { customers: CustomersService }

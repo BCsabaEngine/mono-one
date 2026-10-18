@@ -1,5 +1,7 @@
-import { createTRPC, requireIdentity, type BaseContext } from '@mono/shared-trpc'
-import { documentSchema, getDocumentInput, type DocumentsService } from '@mono/document-contract'
+import { createTRPC, requireIdentity } from '@lib/trpc'
+import type { BaseContext } from '@lib/trpc'
+import { documentSchema, getDocumentInput } from './contract'
+import type { DocumentsService } from './contract'
 
 export interface DocumentContext extends BaseContext {
   services: { documents: DocumentsService }

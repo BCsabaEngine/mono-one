@@ -1,8 +1,9 @@
-import type { Logger } from '@mono/shared-logging'
-import { baseContextFromHeaders, createServiceServer } from '@mono/shared-trpc'
-import { appRouter } from '@mono/document-api/server'
+import type { Logger } from '@lib/logging'
+import { baseContextFromHeaders, createServiceServer } from '@lib/trpc'
+import { appRouter } from '@api/document'
 import type { Config } from './config'
-import { buildContainer, type Cradle } from './container'
+import { buildContainer } from './container'
+import type { Cradle } from './container'
 import { buildEventsRouter } from './events'
 import { createContext } from './trpc/context'
 

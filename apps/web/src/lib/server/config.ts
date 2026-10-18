@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { commonEnvSchema, loadConfig } from '@mono/shared-config'
+import { commonEnvSchema, loadConfig } from '@lib/config'
 
 const schema = commonEnvSchema.extend({
 	SERVICE_ID: z.string().default('web'),

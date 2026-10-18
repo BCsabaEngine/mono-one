@@ -1,4 +1,4 @@
-import { createEventsRouter } from '@mono/events-client'
+import { createEventsRouter } from '@events/client'
 import type { DocumentsServiceImpl } from '../services/documents'
 
 /** Exactly one handler per subscribed event type; the payload type comes from order-service's schema via the registry. */

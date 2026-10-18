@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from 'node:http'
 import { asValue } from 'awilix'
-import { baseContextFromHeaders } from '@mono/shared-trpc'
-import type { CustomerContext } from '@mono/customer-api/server'
+import { baseContextFromHeaders } from '@lib/trpc'
+import type { CustomerContext } from '@api/customer'
 import type { Container, Cradle } from '../container'
 
 /** One scoped Awilix container per request, carrying the request-ID child logger. */

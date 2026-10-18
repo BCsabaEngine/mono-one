@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from 'node:http'
 import { asValue } from 'awilix'
-import { baseContextFromHeaders } from '@mono/shared-trpc'
-import type { OrderContext } from '@mono/order-api/server'
+import { baseContextFromHeaders } from '@lib/trpc'
+import type { OrderContext } from '@api/order'
 import type { Container, Cradle } from '../container'
 
 /** One scoped Awilix container per request, carrying the request-ID child logger. */

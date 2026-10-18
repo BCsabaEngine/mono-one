@@ -1,6 +1,6 @@
-import { redactConfig } from '@mono/shared-config'
-import { createLogger } from '@mono/shared-logging'
-import { shutdownOnSignal } from '@mono/shared-trpc'
+import { redactConfig } from '@lib/config'
+import { createLogger } from '@lib/logging'
+import { shutdownOnSignal } from '@lib/trpc'
 import { createApp } from './app'
 import { loadServiceConfig } from './config'
 

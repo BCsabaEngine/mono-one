@@ -1,9 +1,9 @@
 import { Redis } from 'ioredis'
-import { createLogger } from '@mono/shared-logging'
-import { createServiceClient } from '@mono/shared-trpc'
-import type { AppRouter as CustomerRouter } from '@mono/customer-api'
-import type { AppRouter as DocumentRouter } from '@mono/document-api'
-import type { AppRouter as OrderRouter } from '@mono/order-api'
+import { createLogger } from '@lib/logging'
+import { createServiceClient } from '@lib/trpc'
+import type { AppRouter as CustomerRouter } from '@api/customer'
+import type { AppRouter as DocumentRouter } from '@api/document'
+import type { AppRouter as OrderRouter } from '@api/order'
 import { getConfig } from './config'
 
 const build = () => {

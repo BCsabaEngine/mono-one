@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
-import { notFound } from '@mono/shared-errors'
-import type { Document, DocumentsService } from '@mono/document-contract'
+import { notFound } from '@lib/errors'
+import type { Document, DocumentsService } from '@api/document'
 import type { Cradle } from '../container'
 import { documents } from '../db/schema'
 

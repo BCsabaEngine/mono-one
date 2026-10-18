@@ -56,31 +56,29 @@ Pinned exactly (`save-exact`, committed `pnpm-lock.yaml`, `.node-version`, Docke
 | SvelteKit / Svelte / Vite           | 3.1.0 / 5.57.2 / 8.3.4             |                                                       |
 | tRPC                                | 11.19.0                            |                                                       |
 | Zod / Vitest / ESLint / Drizzle ORM | 4.6.7 / 5.0.5 / 10.13.0 / 0.45.4   |                                                       |
-| Postgres / Redis images             | 18.6-alpine3.24 / 8.8.3-alpine3.23 | `docker-compose.yml`, `libs/shared/testing`           |
+| Postgres / Redis images             | 18.6-alpine3.24 / 8.8.3-alpine3.23 | `docker-compose.yml`, `libs/testing.ts`               |
 
 ## Workspace layout
 
 ```
 apps/web  apps/customer-service  apps/order-service  apps/document-service
 libs/
-  customer-contract  order-contract  document-contract   Zod schemas, DTOs, service "port" interfaces (leaf)
-  customer-api  order-api  document-api                  tRPC router + AppRouter type, delegates to ports via context
-  shared/config logging errors db migrations trpc testing
-  events-contract  order-events  events-registry  events-client
-tools/   eslint/boundaries.mjs, build-app.mjs, dev.mjs
+  customer-api  order-api  document-api                  contract.ts (Zod schemas, DTOs, service "port" interfaces) + server.ts (tRPC router, AppRouter type)
+  config.ts logging.ts errors.ts db.ts testing.ts  trpc/ migrations/   shared helpers, imported as @lib/<name>; not an Nx project
+  events/   one Nx project, imported as @events/<file>: contract.ts (defineEvent, envelope, ServiceId, EventsRouter) registry.ts (EVENTS map) client.ts (publisher, events router) + one file per owning service (order.ts)
+tools/   eslint/boundaries.mjs, build-app.mjs, dev.mjs, migrate.mjs, apps.mjs (shared helpers)
 ```
 
 - Libs are source-consumed (not buildable); path mappings live in `tsconfig.paths.json` (shared by `tsconfig.base.json` and `apps/web/tsconfig.json`). No `baseUrl` (deprecated in TS 6); entries start with `./`.
-- `*-api` libs have two entry points: `@mono/<svc>-api` (types only: `AppRouter` + contract re-exports) and `@mono/<svc>-api/server` (`appRouter`, context type; only for the owning service). The router never imports from an app, so the Nx graph stays acyclic.
-- Shared libs: `config` (Zod env, base schema, secret redaction), `logging` (pino, request-ID child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `testing` (Testcontainers helpers, tests only).
+- `*-api` libs hold the contract (`contract.ts`) and the router (`server.ts`) and have one entry point, `@api/<svc>` (`@api/*` maps to `libs/*-api/src/index.ts`; contract re-exports, `AppRouter` type, plus `appRouter` and the context type, which ESLint restricts to the owning service app). The router never imports from an app, so the Nx graph stays acyclic.
+- Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, request-ID child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `testing` (Testcontainers helpers, tests only).
 
 ### Boundaries (`tools/eslint/boundaries.mjs`)
 
-- Tags: `type:app|api|contract|shared|registry|events-client` and `scope:web|customer|order|document|shared|registry`.
-- apps may depend on api, contract, shared, registry, events-client; api and contract only on contract and shared; shared only on shared; the registry only on contract libs; nothing depends on an app.
-- Other apps import `@mono/<svc>-api` types only (`consistent-type-imports`); `/server` is restricted to the owning app (`no-restricted-imports`). Callers never import another service's internals.
+- Tags: `type:app|api|events` and `scope:web|customer|order|document|events`. The `@lib` helpers have no tags: they are not an Nx project, so the rules do not check them.
+- apps may depend on api and events; api and events depend on no tagged lib (only on the untagged `@lib` helpers); nothing depends on an app.
+- Other apps import `@api/<svc>` types only (`consistent-type-imports`); `appRouter` and the context type are restricted to the owning app (`no-restricted-imports` with `importNames`). Callers never import another service's internals.
 - Both ESLint configs import the same boundaries module, so `web` cannot escape the rules.
-- `events-client` is tagged `type:events-client`, `scope:registry` because Nx applies every matching constraint.
 
 ## Per-service structure
 
@@ -89,9 +87,9 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
   config.ts  container.ts  migrate.ts  trpc/context.ts  services/  events/  db/{schema,migrations,drizzle.config.ts}
 ```
 
-- Business logic in `services/` implements the ports from `<svc>-contract`; routers (in `<svc>-api`) validate input with the contract schemas and delegate through `ctx.services`.
+- Business logic in `services/` implements the ports from `<svc>-api` (`contract.ts`, imported type-only); routers (in `<svc>-api`) validate input with the contract schemas and delegate through `ctx.services`.
 - **Awilix**: root container at startup, a scoped container per request in `createContext` (carries the request-ID logger). Services get dependencies from the cradle and never import the container. The pg pool is disposed by `container.dispose()` on shutdown.
-- **Errors**: throw `DomainError` (`@mono/shared-errors`); mapped to `TRPCError` in one place (`createTRPC` in `shared/trpc`). Unknown errors are logged and masked. Downstream tRPC errors are re-raised with their code by `fromClientError`.
+- **Errors**: throw `DomainError` (`@lib/errors`); mapped to `TRPCError` in one place (`createTRPC` in `libs/trpc`). Unknown errors are logged and masked. Downstream tRPC errors are re-raised with their code by `fromClientError`.
 - **Logging**: one pino child logger per request with a request ID, forwarded in `x-request-id` on service calls. pino-pretty only in development.
 - **Health**: `/healthz` (liveness), `/readyz` (Postgres ping). Graceful shutdown on SIGTERM/SIGINT: stop accepting, drain, close the pool.
 - **Service clients** (`createServiceClient`) use `httpLink` with a per-call context `{ jwt, requestId }` and a timeout, not `httpBatchLink` (a batch would share one `authorization` header).
@@ -104,18 +102,18 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 ## Events (no bus, no persistence, no retry)
 
-- Each event type has exactly one owning service: it defines the schema in its own `<owner>-events` lib (`defineEvent`), is the only sender, and never subscribes to its own events. `events-registry` holds the `EVENTS` map (owner, schema, subscribers) and the derived types `EventsOwnedBy<S>` / `EventsFor<S>`; a type check fails if an owner subscribes to itself. Current event: `order.placed` (owner `order-service`; subscribers `document-service`, `web`).
+- Each event type has exactly one owning service: it defines the schema in its own file in `libs/events` (e.g. `order.ts`, `defineEvent`; CODEOWNERS gives that file to the owning team), is the only sender, and never subscribes to its own events. `@events/registry` holds the `EVENTS` map (owner, schema, subscribers) and the derived types `EventsOwnedBy<S>` / `EventsFor<S>`; a type check fails if an owner subscribes to itself. Current event: `order.placed` (owner `order-service`; subscribers `document-service`, `web`).
 - `createPublisher(serviceId)` accepts only events the service owns (compile error otherwise), validates against the owner's schema, then calls every subscriber's `events.deliver` instantly and in parallel with a short timeout. It returns `{ delivered, failed }` and logs failures; counters via `failedDeliveries()`.
 - `createEventsRouter(serviceId, handlers)` mounts `events.deliver` on `/events`. The handler map is typed from the registry (exactly the subscribed events), every event is validated against the owner's schema, and `x-service-id` must equal the registered owner (a consistency check, not security).
 - Guarantees: best effort, at most once, unordered. Events are signals; the owner's database is the source of truth. Publish after the DB commit. Anything that must not be lost is a direct tRPC call whose result the caller checks. Avoid event cycles.
 - `web` owns no events. Its handler emits to an in-memory bus that feeds the SSE subscription, so `web` must run as exactly one instance.
-- To add an event: schema in the owner's `*-events` lib (create the lib, CODEOWNERS entry, tags and path mapping if the service has none), register it in `events-registry`, add handlers in each subscriber's `createEventsRouter`, publish from the owner after commit.
+- To add an event: schema in the owner's file `libs/events/<svc>.ts` (add a CODEOWNERS entry if the service has none), register it in `@events/registry`, add handlers in each subscriber's `createEventsRouter`, publish from the owner after commit.
 
 ## Auth
 
 - End users authenticate in `web` only (`hooks.server.ts`); the JWT is stored in Redis and sent to the core services as `authorization: Bearer <jwt>` on calls that need the user's identity (service-only calls omit it). Events never carry the JWT.
 - **Core services decode the JWT without verifying it** (no signature, `aud`, `exp` or revocation check) and use the claims for authorization only (`ctx.identity`, `requireIdentity`). `x-service-id` is informational.
-- This is safe only while the core services are reachable solely from `web` and other services (private network, no public port). `docker-compose.yml` publishes only `web`. If that changes, add verification in the shared tRPC identity middleware (`shared/trpc`); nothing else depends on it.
+- This is safe only while the core services are reachable solely from `web` and other services (private network, no public port). `docker-compose.yml` publishes only `web`. If that changes, add verification in the shared tRPC identity middleware (`libs/trpc`); nothing else depends on it.
 - Not a public API: an external consumer would need a REST/OpenAPI layer on top.
 
 ## SvelteKit 3 specifics
@@ -130,7 +128,9 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 - One root `package.json`, one `pnpm-lock.yaml`, no pnpm workspaces. `pnpm-workspace.yaml` only holds `allowBuilds` (pnpm 12 no longer reads the `pnpm` field) and declares no packages. `.npmrc`: `save-exact=true`. The only other `package.json` is `apps/web/package.json`.
 - Nx needs `@nx/js` to build project-graph edges from TS imports. Targets are plain `nx:run-commands` defined in `nx.json` `targetDefaults` (`typecheck`, `lint`, `test`) and per-project `project.json` (`serve`, `build`, `migrate`, `db-generate`, `docker-build`). `docker-build` depends on `build`.
+- The root `lint`/`typecheck`/`test`/`build` scripts pass `--output-style=static` so Nx prints task logs inline instead of the TUI or a summary.
 - Root ESLint flat config and Prettier config cover services and libs; `apps/web` has its own (`eslint-plugin-svelte`, `prettier-plugin-svelte`, tabs). Prettier uses the nearest config.
+- Type-only imports are always top-level `import type { X }`, never `import { type X }` (`consistent-type-imports` with `separate-type-imports`, `no-import-type-side-effects`, and `no-restricted-syntax` banning inline `type` specifiers; both ESLint configs get them from `boundaries.mjs`). `verbatimModuleSyntax` is on.
 - Code style: compact, arrow functions, no boilerplate; services single quotes, no semicolons; `apps/web` uses tabs.
 
 ## Commands
@@ -138,8 +138,11 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 ```bash
 corepack enable && pnpm install
 pnpm dev:infra          # postgres + redis in Docker
-pnpm dev                # creates missing .env files, migrates, serves web + services with reload
-pnpm nx run-many -t lint typecheck test build   # before finishing any change (test needs Docker)
+pnpm migrate            # applies migrations of all services (run after dev:infra and after pulling schema changes)
+pnpm dev                # creates missing .env files, serves web + services with reload (no migrations)
+pnpm all                # lint + typecheck + build (no tests)
+pnpm lint               # nx lint of all projects + eslint for the @lib helpers (not an Nx project)
+pnpm nx run-many -t typecheck test build   # before finishing any change, together with pnpm lint (test needs Docker)
 pnpm nx affected -t lint typecheck test --base=main
 pnpm nx format:check
 pnpm nx graph
@@ -147,18 +150,18 @@ pnpm nx db-generate <svc>
 pnpm nx run-many -t build && docker compose up -d --build   # full stack in Docker, web on :3000
 ```
 
-- `pnpm dev` (`tools/dev.mjs`) starts the apps directly, not through `nx run-many`: every Nx task run switches the terminal to raw mode and garbles the interleaved output. It reads the `serve`/`migrate` commands from each `project.json`. `nx serve <app>` still works for one app.
+- `pnpm dev` (`tools/dev.mjs`) starts the apps directly, not through `nx run-many`: every Nx task run switches the terminal to raw mode and garbles the interleaved output. It reads the `serve` command from each `project.json`; `pnpm migrate` (`tools/migrate.mjs`) reads the `migrate` commands the same way. `nx serve <app>` still works for one app.
 - Config is env-driven and Zod-validated at startup (`.env.example` per app). Core services need `DATABASE_URL`; service URLs default to `localhost:300x`.
 
 ## Docker and CI
 
 - Every app is fully bundled (esbuild via `tools/build-app.mjs` for services; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) and `pino-pretty` (dev only) stay external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
 - `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, one-off migration jobs, the three services and `web`.
-- CI (`.github/workflows/ci.yml`, Node from `.node-version`): `nx format:check`, `nx affected -t lint typecheck test`, `build`, `docker-build`. Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
+- CI (`.github/workflows/ci.yml`, Node from `.node-version`): `nx format:check`, `pnpm lint` (nx lint + @lib helpers), `nx run-many -t typecheck test`, `build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
 
 ## Affected builds
 
-Callers depend on `*-api`, not on service apps, so internal service changes do not ripple outward: a change inside `order-service` affects only it; `customer-api` affects `customer-service`, `order-service`, `web`; `events-contract`, `events-registry` or `order-events` affect every app that uses events; `shared/*` affects everything. Keep API changes additive: services deploy independently and type safety is compile-time only.
+Callers depend on `*-api`, not on service apps, so internal service changes do not ripple outward: a change inside `order-service` affects only it; `customer-api` affects `customer-service`, `order-service`, `web`; `events` affects every app that uses events; `libs/*.ts`, `libs/trpc` and `libs/migrations` affect everything (listed in `sharedGlobals` in `nx.json`). Keep API changes additive: services deploy independently and type safety is compile-time only.
 
 ## Not done yet
 

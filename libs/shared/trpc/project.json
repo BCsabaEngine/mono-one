@@ -1,8 +1,0 @@
-{
-  "name": "shared-trpc",
-  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "projectType": "library",
-  "sourceRoot": "libs/shared/trpc/src",
-  "tags": ["type:shared", "scope:shared"],
-  "targets": { "typecheck": {}, "lint": {} }
-}

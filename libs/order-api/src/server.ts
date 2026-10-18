@@ -1,5 +1,7 @@
-import { createTRPC, requireIdentity, type BaseContext } from '@mono/shared-trpc'
-import { orderSchema, placeOrderInput, type OrdersService } from '@mono/order-contract'
+import { createTRPC, requireIdentity } from '@lib/trpc'
+import type { BaseContext } from '@lib/trpc'
+import { orderSchema, placeOrderInput } from './contract'
+import type { OrdersService } from './contract'
 
 export interface OrderContext extends BaseContext {
   services: { orders: OrdersService }

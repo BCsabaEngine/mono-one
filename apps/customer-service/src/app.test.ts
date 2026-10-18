@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runMigrations } from '@mono/shared-migrations'
-import { listen, silentLogger, startPostgres, testBaseConfig } from '@mono/shared-testing'
-import { createServiceClient, unsignedJwt, type CallContext } from '@mono/shared-trpc'
-import type { AppRouter } from '@mono/customer-api'
+import { runMigrations } from '@lib/migrations'
+import { listen, silentLogger, startPostgres, testBaseConfig } from '@lib/testing'
+import { createServiceClient, unsignedJwt } from '@lib/trpc'
+import type { CallContext } from '@lib/trpc'
+import type { AppRouter } from '@api/customer'
 import { createApp } from './app'
 import type { Config } from './config'
 

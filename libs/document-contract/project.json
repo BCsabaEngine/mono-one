@@ -1,8 +1,0 @@
-{
-  "name": "document-contract",
-  "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "projectType": "library",
-  "sourceRoot": "libs/document-contract/src",
-  "tags": ["type:contract", "scope:document"],
-  "targets": { "typecheck": {}, "lint": {} }
-}

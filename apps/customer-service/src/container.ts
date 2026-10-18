@@ -1,6 +1,6 @@
 import { asClass, asFunction, asValue, createContainer, InjectionMode } from 'awilix'
-import { createDb } from '@mono/shared-db'
-import type { Logger } from '@mono/shared-logging'
+import { createDb } from '@lib/db'
+import type { Logger } from '@lib/logging'
 import type { Config } from './config'
 import * as schema from './db/schema'
 import { CustomersServiceImpl } from './services/customers'

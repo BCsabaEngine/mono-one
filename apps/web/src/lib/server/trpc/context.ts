@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { decodeJwt, type BaseContext, type CallContext } from '@mono/shared-trpc'
+import { decodeJwt } from '@lib/trpc'
+import type { BaseContext, CallContext } from '@lib/trpc'
 import { getServices } from '../services'
 
 export interface WebContext extends BaseContext {

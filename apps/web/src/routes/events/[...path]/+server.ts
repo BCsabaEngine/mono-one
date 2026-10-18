@@ -1,6 +1,6 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
-import { createEventsRouter } from '@mono/events-client'
-import { baseContextFromHeaders } from '@mono/shared-trpc'
+import { createEventsRouter } from '@events/client'
+import { baseContextFromHeaders } from '@lib/trpc'
 import type { RequestHandler } from './$types'
 import { bus } from '#lib/server/bus.ts'
 import { getServices } from '#lib/server/services.ts'
