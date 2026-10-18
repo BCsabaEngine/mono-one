@@ -48,11 +48,11 @@ Directions: `web` -> all three, `order-service` -> `customer-service`. Demo data
 
 ### Versions
 
-Pinned exactly (`save-exact`, committed `pnpm-lock.yaml`, `.node-version`, Docker tags); upgrade only deliberately, in a dedicated change, and re-run `lint typecheck test build`. Never use `latest` or ranges.
+Pinned exactly (`save-exact`, committed `pnpm-lock.yaml`, `.nvmrc`, Docker tags); upgrade only deliberately, in a dedicated change, and re-run `lint typecheck test build`. Never use `latest` or ranges.
 
 | Item                                | Version                            | Note                                                  |
 | ----------------------------------- | ---------------------------------- | ----------------------------------------------------- |
-| Node                                | 24.21.0                            | `.node-version`, `engines`, `node:24.21.0-slim`       |
+| Node                                | 24.21.0                            | `.nvmrc`, `engines`, `node:24.21.0-slim`              |
 | pnpm                                | 12.14.0                            | via Corepack (`packageManager`)                       |
 | Nx and `@nx/*`                      | 23.3.0                             | all on one version (incl. `@nx/eslint`, `@nx/vitest`) |
 | TypeScript                          | 6.0.3                              | not 7: SvelteKit 3 requires 6 and Nx needs the TS API |
@@ -165,7 +165,7 @@ pnpm nx run-many -t build && docker compose up -d --build   # full stack in Dock
 
 - Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) and `pino-pretty` (dev only) stay external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
 - `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, one-off migration jobs, the three services and `web`.
-- CI (`.github/workflows/ci.yml`, Node from `.node-version`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test`, `build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
+- CI (`.github/workflows/ci.yml`, Node from `.nvmrc`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test`, `build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
 
 ## Affected builds
 

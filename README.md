@@ -3,7 +3,7 @@
 Nx + pnpm monorepo: a SvelteKit 3 frontend/BFF (`web`) in front of three tRPC services (`customer-service`, `order-service`, `document-service`). Technical docs: [CLAUDE.md](CLAUDE.md). Business docs: [docs/](docs/README.md).
 
 ```bash
-corepack enable && pnpm install        # Node 24 (.node-version)
+corepack enable && pnpm install        # Node 24 (.nvmrc)
 pnpm nx run-many -t lint typecheck test build
 pnpm nx graph
 ```
