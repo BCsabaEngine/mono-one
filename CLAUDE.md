@@ -12,6 +12,7 @@ Technical documentation (architecture, conventions, versions). Business document
 Browser ──tRPC──> web (SvelteKit 3: FE + BFF) ──tRPC/HTTP──> customer-service
                                               ──tRPC/HTTP──> order-service ──tRPC/HTTP──> customer-service
                                               ──tRPC/HTTP──> document-service
+                                              ──tRPC/HTTP──> system-service (users + permissions)
 order-service ──events.deliver (tRPC, instant, parallel)──> document-service, web
 core services ──> Postgres (one database each)        web ──> Redis (JWT storage only)
 ```
@@ -24,14 +25,15 @@ core services ──> Postgres (one database each)        web ──> Redis (JWT
 
 ### Apps and example endpoints
 
-| App                | Port | Procedure                                                                  | Notes                                                                                  |
-| ------------------ | ---- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `web`              | 3000 | `customers.get`, `orders.place`, `documents.get`, `live.orderPlaced` (SSE) | proxies to the services; runs as exactly one instance                                  |
-| `customer-service` | 3001 | `customers.get`                                                            |                                                                                        |
-| `order-service`    | 3002 | `orders.place`                                                             | calls `customers.get` (forwarding the JWT), stores the order, publishes `order.placed` |
-| `document-service` | 3003 | `documents.get`                                                            | the document is created by the `order.placed` event                                    |
+| App                | Port | Procedure                                                                               | Notes                                                                                  |
+| ------------------ | ---- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `web`              | 3000 | `customers.get`, `orders.place`, `documents.get`, `live.orderPlaced` (SSE)              | proxies to the services; runs as exactly one instance                                  |
+| `customer-service` | 3001 | `customers.get`                                                                         |                                                                                        |
+| `order-service`    | 3002 | `orders.place`                                                                          | calls `customers.get` (forwarding the JWT), stores the order, publishes `order.placed` |
+| `document-service` | 3003 | `documents.get`                                                                         | the document is created by the `order.placed` event                                    |
+| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete` | users + flat permissions (see System service); later runtime configs, tasks, calendar  |
 
-Directions: `web` -> all three, `order-service` -> `customer-service`. Demo data: `pnpm nx seed <svc>` (customer-service, order-service; see Data rules). The web `/auth/dev-login` route (behind `ENABLE_DEV_LOGIN`) mints an unsigned demo JWT; replace it with the real login flow and keep the flag off in production.
+Directions: `web` -> all four, `order-service` -> `customer-service`. Demo data: `pnpm nx seed <svc>` (customer-service, order-service, system-service; see Data rules). The web `auth.login` tRPC mutation is the real login (`users.auth`, then an unsigned JWT with `sub`, `permissions`, `email`, `name` stored in Redis; it sets the `sid` cookie through `ctx.cookies`); seeded starter user `hello@mono.hu` / `hello` (`pnpm nx seed system-service`).
 
 ## Stack
 
@@ -65,9 +67,9 @@ Pinned exactly (`save-exact`, committed `pnpm-lock.yaml`, `.nvmrc`, Docker tags)
 ## Workspace layout
 
 ```
-apps/web  apps/customer-service  apps/order-service  apps/document-service
+apps/web  apps/customer-service  apps/order-service  apps/document-service  apps/system-service
 libs/
-  customer-api  order-api  document-api                  contract.ts (Zod schemas, DTOs, service "port" interfaces) + server.ts (tRPC router, AppRouter type)
+  customer-api  order-api  document-api  system-api                  contract.ts (Zod schemas, DTOs, service "port" interfaces) + server.ts (tRPC router, AppRouter type)
   config.ts logging.ts errors.ts db.ts seedIds.ts seeding.ts testing.ts  trpc/ migrations/   shared helpers, imported as @lib/<name>; not an Nx project
   events/   one Nx project, imported as @events/<file>: contract.ts (defineEvent, envelope, ServiceId, EventsRouter) registry.ts (EVENTS map) client.ts (publisher, events router) + one file per owning service (order.ts)
 ```
@@ -104,9 +106,32 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - Migrations run as a separate step (`pnpm nx run <svc>:migrate` (not `nx migrate`, that is Nx's built-in upgrade command), or `node migrate.mjs` in the image), under a Postgres advisory lock; the `__drizzle_migrations` table lives in the same schema as the tables (`DB_SCHEMA`, default `public`), not in drizzle's own `drizzle` schema. Change the schema, then `pnpm nx db-generate <svc>` and commit the SQL.
 - **Seed data is code, never a migration.** `pnpm seed` / `pnpm nx seed <svc>` (tsx, not bundled into the images) wipes the service's tables and re-inserts deterministic demo rows; it refuses `NODE_ENV=production`. All seed ids come from `libs/seedIds.ts` (`seedId(entity, n)` / `seedIds(entity)`, n = 1..100, one UUID namespace per entity), so services reference each other's seed rows (an order's `customerId`) without reading each other's databases. New entity: add its prefix there; new seeded service: `src/db/seed.ts` (`seed(db)`) + `src/seed.ts` (`seedService`) + a `seed` target.
 
+### Schema conventions (new schemas)
+
+- Primary keys are autoincrement values, never UUIDs.
+- Use foreign keys, with `ON DELETE CASCADE` where it makes sense; add proper indices and unique constraints.
+- Table names are singular, never plural.
+- Use `text` freely instead of `varchar(n)`.
+- Enums: Drizzle enums on a text column (`text('col', { enum: [...] })`); never create Postgres enum types (`pgEnum`).
+- The current schemas predate these rules (UUID ids, plural names). They will be dropped and recreated later, so do not retrofit them.
+
+### Migration workflow (during development)
+
+- Generate migrations (`pnpm nx db-generate <svc>`) only when explicitly asked, not after every schema change.
+- Under development apply schema changes with `drizzle-kit push` only.
+
+## System service
+
+- `system-service` owns the `user` and `permission` tables (own database `mono_system`); `web` has no database and calls it over tRPC (`web` router `users.*` forwards the user's JWT). It is the home for later runtime-editable configs, user tasks and the calendar: keep one router namespace and one schema file per domain.
+- `user`: `id`, `email` (unique, the login name, stored lowercase), `name` (not unique), `password` (unsalted SHA-256 hex via `services/password.ts`, one file to swap later), `created`, `updated`, `deleted` (null = active, soft delete). `permission`: `user_id` (FK, cascade), `name` (text enum `PERMISSIONS` from `libs/system-api/src/permissions.ts`), unique `(user_id, name)`. Flat permissions only, no roles.
+- `users.get` / `users.getMany` (1..100 ids, order kept, unknown ids omitted) also return soft-deleted users (the `deleted` date is in the DTO); `users.auth` and `users.update` reject them. DTOs never carry the password. `users.add` / `update` / `delete` need the `user.admin` permission (`requirePermission` in `libs/trpc`, from the JWT `permissions` claim); `users.auth` is the only call without an identity.
+- Its seed uses integer identities (restarted at 1: the starter user has id 1 with every permission), not `libs/seedIds.ts`, which is UUID-based; add a `seedIds` mapping only when another service must reference seed users.
+- The schema imports `PERMISSIONS` by relative path from a dependency-free file because drizzle-kit ignores tsconfig paths (same reason as `drizzle.config.ts`; the import carries an eslint-disable).
+- No committed migrations yet (see Migration workflow): create the tables with `pnpm migrate` (its `system-service:migrate` target runs `drizzle-kit push`, after `pnpm dev:infra`; an existing Postgres volume needs `CREATE DATABASE mono_system;` once because the init script only runs on an empty volume), then `pnpm nx seed system-service`. Tests create the tables with drizzle-kit's `pushSchema`. Compose has no `system-migrate` job; generate migrations and add it before deploying. `src/migrate.ts` (the image's `migrate.mjs`) exists only because the esbuild defaults bundle it; it needs generated migrations to be useful.
+
 ## Events (no bus, no persistence, no retry)
 
-- Each event type has exactly one owning service: it defines the schema in its own file in `libs/events` (e.g. `order.ts`, `defineEvent`; CODEOWNERS gives that file to the owning team), is the only sender, and never subscribes to its own events. `@events/registry` holds the `EVENTS` map (owner, schema, subscribers) and the derived types `EventsOwnedBy<S>` / `EventsFor<S>`; a type check fails if an owner subscribes to itself. Current event: `order.placed` (owner `order-service`; subscribers `document-service`, `web`).
+- Each event type has exactly one owning service: it defines the schema in its own file in `libs/events` (e.g. `order.ts`, `defineEvent`; CODEOWNERS gives that file to the owning team), is the only sender, and never subscribes to its own events. `@events/registry` holds the `EVENTS` map (owner, schema, subscribers) and the derived types `EventsOwnedBy<S>` / `EventsFor<S>`; a type check fails if an owner subscribes to itself. Current event: `order.placed` (owner `order-service`; subscribers `document-service`, `web`). `system-service` is a known `ServiceId` but owns and subscribes to nothing yet.
 - `createPublisher(serviceId)` accepts only events the service owns (compile error otherwise), validates against the owner's schema, then calls every subscriber's `events.deliver` instantly and in parallel with a short timeout. It returns `{ delivered, failed }` and logs failures; counters via `failedDeliveries()`.
 - `createEventsRouter(serviceId, handlers)` mounts `events.deliver` on `/events`. The handler map is typed from the registry (exactly the subscribed events), every event is validated against the owner's schema, and `x-service-id` must equal the registered owner (a consistency check, not security).
 - Guarantees: best effort, at most once, unordered. Events are signals; the owner's database is the source of truth. Publish after the DB commit. Anything that must not be lost is a direct tRPC call whose result the caller checks. Avoid event cycles.
@@ -126,6 +151,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - **`apps/web/package.json` exists** (`name`, `type`, `imports` only, no dependencies; every dependency is in the root file). SvelteKit 3 has no `files` option so the app must run with `apps/web` as cwd, and `adapter-node` reads `package.json` from there. Run web tooling through root binaries (`nx`, or `PATH=$PWD/node_modules/.bin`), not `pnpm exec` inside `apps/web`.
 - `#lib/*` maps to `apps/web/src/lib/*`; imports need the file extension (`#lib/server/session.ts`) because Node subpath patterns do no extension probing. `@nx/enforce-module-boundaries` allows `#lib`.
 - v3 API: `Handle` comes from `@sveltejs/kit/hooks`; `$env/*` became `$app/env/*` (web reads `process.env` through the shared Zod config); `$lib` is gone. Remote functions are experimental and unused: tRPC is the client-server layer.
+- `apps/web/vite.config.ts` marks every `libs/*-api/src/server.ts` as side-effect free, so the services' routers (re-exported by `@api/<svc>`) are tree-shaken out of the `web` bundle; the bundle holds only the contract schemas and no service code or database access (check: `grep -r "#region" dist/apps/web` after `nx build web` lists no `apps/` or `*-api/src/server.ts`, and no `drizzle`/`pg`).
 - Browser tRPC client: `splitLink` (SSE `httpSubscriptionLink` for subscriptions, `httpBatchLink` otherwise).
 
 ## Tooling
@@ -175,4 +201,4 @@ Callers depend on `*-api`, not on service apps, so internal service changes do n
 
 ## Not done yet
 
-Registry push in CI, husky/lint-staged, OpenTelemetry tracing, a real login flow, real service domains (the three services are examples).
+Registry push in CI, husky/lint-staged, OpenTelemetry tracing, real service domains (customer, order and document services are examples).

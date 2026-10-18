@@ -5,6 +5,7 @@ x-service-urls: &service-urls
   CUSTOMER_SERVICE_URL: http://customer-service:3001
   ORDER_SERVICE_URL: http://order-service:3002
   DOCUMENT_SERVICE_URL: http://document-service:3003
+  SYSTEM_SERVICE_URL: http://system-service:3004
 
 x-db-service: &db-service
   depends_on:
@@ -98,13 +99,23 @@ services:
     depends_on:
       document-migrate: { condition: service_completed_successfully }
 
+  # no system-migrate job yet: system-service has no committed migrations during development (CLAUDE.md), so
+  # its tables come from `pnpm migrate` (drizzle-kit push); generate migrations and add the job before deploying
+  system-service:
+    <<: *db-service
+    build: { context: ., dockerfile: apps/system-service/Dockerfile }
+    environment:
+      {
+        <<: *service-urls,
+        DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_system'
+      }
+
   web: # must run as exactly one instance (events are fanned out in memory to connected browsers)
     build: { context: ., dockerfile: apps/web/Dockerfile }
     environment:
       {
         <<: *service-urls,
         REDIS_URL: 'redis://redis:6379',
-        ENABLE_DEV_LOGIN: 'true',
         ORIGIN: 'http://localhost:3000'
       }
     ports: ['3000:3000']
@@ -113,6 +124,7 @@ services:
       customer-service: { condition: service_started }
       order-service: { condition: service_started }
       document-service: { condition: service_started }
+      system-service: { condition: service_started }
 
 volumes:
   pgdata:

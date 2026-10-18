@@ -15,7 +15,8 @@ export const serviceUrls = (c: CommonEnv): ServiceUrls => ({
   web: c.WEB_URL,
   'customer-service': c.CUSTOMER_SERVICE_URL,
   'order-service': c.ORDER_SERVICE_URL,
-  'document-service': c.DOCUMENT_SERVICE_URL
+  'document-service': c.DOCUMENT_SERVICE_URL,
+  'system-service': c.SYSTEM_SERVICE_URL
 })
 
 export interface PublishResult {
@@ -38,11 +39,21 @@ export const createPublisher = <S extends ServiceId>({
   log: Logger
   timeoutMs: number
 }) => {
-  const clients = new Map<ServiceId, ReturnType<typeof createServiceClient<EventsRouter>>>()
+  const clients = new Map<
+    ServiceId,
+    ReturnType<typeof createServiceClient<EventsRouter>>
+  >()
   const client = (target: ServiceId) =>
     clients.get(target) ??
     clients
-      .set(target, createServiceClient<EventsRouter>({ url: `${urls[target]}/events`, serviceId, timeoutMs }))
+      .set(
+        target,
+        createServiceClient<EventsRouter>({
+          url: `${urls[target]}/events`,
+          serviceId,
+          timeoutMs
+        })
+      )
       .get(target)!
   const failures = new Map<string, number>() // `${type}:${subscriber}` -> failed delivery count
 
@@ -66,21 +77,37 @@ export const createPublisher = <S extends ServiceId>({
     const settled = await Promise.allSettled(
       subscribers.map(s =>
         client(s)
-          .events.deliver.mutate(event, { context: { requestId } satisfies CallContext })
+          .events.deliver.mutate(event, {
+            context: { requestId } satisfies CallContext
+          })
           .then(() => s)
       )
     )
     const result: PublishResult = { delivered: [], failed: [] }
     settled.forEach((r, i) => {
       const subscriber = subscribers[i]!
-      if (r.status === 'fulfilled') return void result.delivered.push(subscriber)
-      const error = r.reason instanceof Error ? r.reason.message : String(r.reason)
+      if (r.status === 'fulfilled')
+        return void result.delivered.push(subscriber)
+      const error =
+        r.reason instanceof Error ? r.reason.message : String(r.reason)
       result.failed.push({ subscriber, error })
-      failures.set(`${type}:${subscriber}`, (failures.get(`${type}:${subscriber}`) ?? 0) + 1)
-      log.warn({ eventType: type, subscriber, requestId, error }, 'event delivery failed')
+      failures.set(
+        `${type}:${subscriber}`,
+        (failures.get(`${type}:${subscriber}`) ?? 0) + 1
+      )
+      log.warn(
+        { eventType: type, subscriber, requestId, error },
+        'event delivery failed'
+      )
     })
     log.info(
-      { eventId: event.id, eventType: type, requestId, ...result, ms: Math.round(performance.now() - started) },
+      {
+        eventId: event.id,
+        eventType: type,
+        requestId,
+        ...result,
+        ms: Math.round(performance.now() - started)
+      },
       'event published'
     )
     return result
@@ -90,11 +117,17 @@ export const createPublisher = <S extends ServiceId>({
 }
 
 type Handlers<S extends ServiceId> = {
-  [K in EventsFor<S>]: (event: EventOf<K>, ctx: BaseContext) => void | Promise<void>
+  [K in EventsFor<S>]: (
+    event: EventOf<K>,
+    ctx: BaseContext
+  ) => void | Promise<void>
 }
 
 /** Subscriber side: mounts `events.deliver`, with exactly one typed handler per subscribed event type. */
-export const createEventsRouter = <S extends ServiceId>(serviceId: S, handlers: Handlers<S>) => {
+export const createEventsRouter = <S extends ServiceId>(
+  serviceId: S,
+  handlers: Handlers<S>
+) => {
   const { router, procedure } = createTRPC<BaseContext>()
   return router({
     events: router({
@@ -102,17 +135,29 @@ export const createEventsRouter = <S extends ServiceId>(serviceId: S, handlers: 
         .input(baseEnvelope)
         .output(deliverAck)
         .mutation(async ({ input, ctx }) => {
-          const def = (EVENTS as Record<string, (typeof EVENTS)[keyof typeof EVENTS] | undefined>)[input.type]
-          if (!def || !(def.subscribers as readonly ServiceId[]).includes(serviceId))
+          const def = (
+            EVENTS as Record<
+              string,
+              (typeof EVENTS)[keyof typeof EVENTS] | undefined
+            >
+          )[input.type]
+          if (
+            !def ||
+            !(def.subscribers as readonly ServiceId[]).includes(serviceId)
+          )
             throw badRequest(`${serviceId} does not subscribe to ${input.type}`)
           // consistency check against bugs and misconfiguration, not a security control
-          if (ctx.serviceId !== def.owner) throw forbidden(`${input.type} may only be sent by ${def.owner}`)
+          if (ctx.serviceId !== def.owner)
+            throw forbidden(`${input.type} may only be sent by ${def.owner}`)
           const parsed = def.schema.safeParse(input)
-          if (!parsed.success) throw badRequest(`invalid ${input.type} event`, parsed.error.issues)
-          await (handlers as Record<string, (e: unknown, c: BaseContext) => void | Promise<void>>)[input.type]!(
-            parsed.data,
-            ctx
-          )
+          if (!parsed.success)
+            throw badRequest(`invalid ${input.type} event`, parsed.error.issues)
+          await (
+            handlers as Record<
+              string,
+              (e: unknown, c: BaseContext) => void | Promise<void>
+            >
+          )[input.type]!(parsed.data, ctx)
           return { ok: true as const }
         })
     })

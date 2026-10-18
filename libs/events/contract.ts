@@ -1,7 +1,13 @@
 import { initTRPC } from '@trpc/server'
 import { z } from 'zod'
 
-export const SERVICE_IDS = ['web', 'customer-service', 'order-service', 'document-service'] as const
+export const SERVICE_IDS = [
+  'web',
+  'customer-service',
+  'order-service',
+  'document-service',
+  'system-service'
+] as const
 export type ServiceId = (typeof SERVICE_IDS)[number]
 
 /** Envelope of every event; `payload` is typed per event by defineEvent. */
@@ -16,11 +22,20 @@ export const baseEnvelope = z.object({
 export type BaseEnvelope = z.infer<typeof baseEnvelope>
 
 /** Schema of one event: the owner's lib calls this, nobody else may define or copy the schema. */
-export const defineEvent = <const T extends string, const V extends number, P extends z.ZodType>(
+export const defineEvent = <
+  const T extends string,
+  const V extends number,
+  P extends z.ZodType
+>(
   type: T,
   version: V,
   payload: P
-) => baseEnvelope.extend({ type: z.literal(type), version: z.literal(version), payload })
+) =>
+  baseEnvelope.extend({
+    type: z.literal(type),
+    version: z.literal(version),
+    payload
+  })
 
 export interface EventDef {
   owner: ServiceId

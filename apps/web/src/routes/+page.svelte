@@ -11,7 +11,8 @@
 			e => show(`${label} failed`, e.message)
 		)
 
-	const login = () => run('login', () => fetch('/auth/dev-login', { method: 'POST' }).then(r => r.json()))
+	const login = () => run('login', () => trpc.auth.login.mutate({ email: 'hello@mono.hu', password: 'hello' })) // seeded starter user (pnpm seed)
+	const getUser = () => run('users.get', () => trpc.users.get.query({ id: 1 }))
 	const getCustomer = () => run('customers.get', () => trpc.customers.get.query({ id: DEMO_CUSTOMER_ID }))
 	const placeOrder = () =>
 		run('orders.place', () => trpc.orders.place.mutate({ customerId: DEMO_CUSTOMER_ID, totalCents: 1990 }))
@@ -33,9 +34,10 @@
 
 <main>
 	<h1>mono-one</h1>
-	<p>SvelteKit BFF calling customer-service, order-service and document-service over tRPC.</p>
+	<p>SvelteKit BFF calling customer-service, order-service, document-service and system-service over tRPC.</p>
 	<div>
-		<button onclick={login}>1. Dev login</button>
+		<button onclick={login}>1. Login as hello@mono.hu</button>
+		<button onclick={getUser}>users.get</button>
 		<button onclick={getCustomer}>customers.get</button>
 		<button onclick={placeOrder}>orders.place</button>
 		<button onclick={getDocument}>place order, then documents.get</button>

@@ -6,10 +6,18 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 const scopes = {
+  'scope:system': ['scope:system', 'scope:events'],
   'scope:customer': ['scope:customer', 'scope:events'],
   'scope:order': ['scope:order', 'scope:customer', 'scope:events'],
   'scope:document': ['scope:document', 'scope:order', 'scope:events'],
-  'scope:web': ['scope:web', 'scope:customer', 'scope:order', 'scope:document', 'scope:events'],
+  'scope:web': [
+    'scope:web',
+    'scope:customer',
+    'scope:order',
+    'scope:document',
+    'scope:system',
+    'scope:events'
+  ],
   'scope:events': ['scope:events']
 }
 
@@ -20,12 +28,25 @@ const types = {
 }
 
 const constraints = [...Object.entries(types), ...Object.entries(scopes)].map(
-  ([sourceTag, onlyDependOnLibsWithTags]) => ({ sourceTag, onlyDependOnLibsWithTags })
+  ([sourceTag, onlyDependOnLibsWithTags]) => ({
+    sourceTag,
+    onlyDependOnLibsWithTags
+  })
 )
 
 // the router and context type exported by `@api/<svc>` are only for the owning service app; everyone else may use the types and contract
-const serviceApps = { customer: 'customer-service', order: 'order-service', document: 'document-service' }
-const contextNames = { customer: 'CustomerContext', order: 'OrderContext', document: 'DocumentContext' }
+const serviceApps = {
+  customer: 'customer-service',
+  order: 'order-service',
+  document: 'document-service',
+  system: 'system-service'
+}
+const contextNames = {
+  customer: 'CustomerContext',
+  order: 'OrderContext',
+  document: 'DocumentContext',
+  system: 'SystemContext'
+}
 const serverOnlyRule = libs => [
   'error',
   {
@@ -40,7 +61,15 @@ const serverOnlyRule = libs => [
 const web = ['apps/web/**']
 
 export default [
-  { ignores: ['**/dist', '**/node_modules', '**/.svelte-kit', '**/.nx', 'apps/*/src/db/migrations'] },
+  {
+    ignores: [
+      '**/dist',
+      '**/node_modules',
+      '**/.svelte-kit',
+      '**/.nx',
+      'apps/*/src/db/migrations'
+    ]
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...svelte.configs.recommended.map(c => ({ ...c, files: c.files ?? web })),
@@ -48,7 +77,12 @@ export default [
   { files: web, languageOptions: { globals: globals.browser } },
   {
     files: ['**/*.svelte', '**/*.svelte.ts'],
-    languageOptions: { parserOptions: { parser: tseslint.parser, extraFileExtensions: ['.svelte'] } }
+    languageOptions: {
+      parserOptions: {
+        parser: tseslint.parser,
+        extraFileExtensions: ['.svelte']
+      }
+    }
   },
   {
     files: ['**/*.ts', '**/*.mts', '**/*.js', '**/*.mjs', '**/*.svelte'],
@@ -56,7 +90,11 @@ export default [
     rules: {
       '@nx/enforce-module-boundaries': [
         'error',
-        { enforceBuildableLibDependency: false, allow: ['^#lib(/.*)?$'], depConstraints: constraints }
+        {
+          enforceBuildableLibDependency: false,
+          allow: ['^#lib(/.*)?$'],
+          depConstraints: constraints
+        }
       ],
       // type-only imports must be top-level `import type`: `import { type X }` stays a side-effect import under verbatimModuleSyntax
       '@typescript-eslint/consistent-type-imports': [
@@ -68,7 +106,8 @@ export default [
         'error',
         {
           selector: 'ImportSpecifier[importKind="type"]',
-          message: 'Use a separate top-level `import type { X }`, not `import { type X }`.'
+          message:
+            'Use a separate top-level `import type { X }`, not `import { type X }`.'
         }
       ],
       'no-restricted-imports': serverOnlyRule(Object.keys(serviceApps))
@@ -77,7 +116,18 @@ export default [
   // lift the restriction inside each owning service app
   ...Object.entries(serviceApps).map(([lib, app]) => ({
     files: [`apps/${app}/**/*.ts`],
-    rules: { 'no-restricted-imports': serverOnlyRule(Object.keys(serviceApps).filter(l => l !== lib)) }
+    rules: {
+      'no-restricted-imports': serverOnlyRule(
+        Object.keys(serviceApps).filter(l => l !== lib)
+      )
+    }
   })),
-  { rules: { '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }] } }
+  {
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' }
+      ]
+    }
+  }
 ]

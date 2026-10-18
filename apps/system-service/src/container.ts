@@ -1,0 +1,34 @@
+import {
+  asClass,
+  asFunction,
+  asValue,
+  createContainer,
+  InjectionMode
+} from 'awilix'
+import { createDb } from '@lib/db'
+import type { Logger } from '@lib/logging'
+import type { Config } from './config'
+import * as schema from './db/schema'
+import { UsersServiceImpl } from './services/users'
+
+export interface Cradle {
+  config: Config
+  log: Logger
+  database: ReturnType<typeof createDb<typeof schema>>
+  users: UsersServiceImpl
+}
+
+/** Root container; the pg pool is disposed through container.dispose() on shutdown. */
+export const buildContainer = (config: Config, log: Logger) =>
+  createContainer<Cradle>({ injectionMode: InjectionMode.PROXY }).register({
+    config: asValue(config),
+    log: asValue(log),
+    database: asFunction(({ config, log }: Cradle) =>
+      createDb(config, log, schema)
+    )
+      .singleton()
+      .disposer(d => d.close()),
+    users: asClass(UsersServiceImpl).scoped()
+  })
+
+export type Container = ReturnType<typeof buildContainer>

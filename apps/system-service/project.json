@@ -1,0 +1,38 @@
+{
+  "name": "system-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/system-service/src",
+  "tags": ["type:app", "scope:system"],
+  "targets": {
+    "typecheck": {},
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx watch --tsconfig apps/system-service/tsconfig.json --env-file-if-exists=apps/system-service/.env apps/system-service/src/main.ts"
+      }
+    },
+    "build": {
+      "executor": "@nx/esbuild:esbuild"
+    },
+    "migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "drizzle-kit push --config apps/system-service/src/db/drizzle.config.ts",
+        "envFile": "apps/system-service/.env"
+      }
+    },
+    "seed": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig apps/system-service/tsconfig.json --env-file-if-exists=apps/system-service/.env apps/system-service/src/seed.ts"
+      }
+    },
+    "docker-build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f apps/system-service/Dockerfile -t mono-one/system-service:latest ."
+      }
+    }
+  }
+}

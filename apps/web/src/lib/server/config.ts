@@ -4,8 +4,6 @@ import { commonEnvSchema, loadConfig } from '@lib/config'
 const schema = commonEnvSchema.extend({
 	SERVICE_ID: z.string().default('web'),
 	REDIS_URL: z.string().default('redis://localhost:6379'),
-	// demo login for local development only; replace with the real login flow
-	ENABLE_DEV_LOGIN: z.stringbool().default(false),
 	JWT_TTL_SECONDS: z.coerce.number().int().positive().default(3600)
 })
 

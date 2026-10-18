@@ -4,6 +4,7 @@ import { createServiceClient } from '@lib/trpc'
 import type { AppRouter as CustomerRouter } from '@api/customer'
 import type { AppRouter as DocumentRouter } from '@api/document'
 import type { AppRouter as OrderRouter } from '@api/order'
+import type { AppRouter as SystemRouter } from '@api/system'
 import { getConfig } from './config'
 
 const build = () => {
@@ -24,7 +25,8 @@ const build = () => {
 		redis: new Redis(config.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 }),
 		customer: createServiceClient<CustomerRouter>(opts(config.CUSTOMER_SERVICE_URL)),
 		order: createServiceClient<OrderRouter>(opts(config.ORDER_SERVICE_URL)),
-		document: createServiceClient<DocumentRouter>(opts(config.DOCUMENT_SERVICE_URL))
+		document: createServiceClient<DocumentRouter>(opts(config.DOCUMENT_SERVICE_URL)),
+		system: createServiceClient<SystemRouter>(opts(config.SYSTEM_SERVICE_URL))
 	}
 }
 

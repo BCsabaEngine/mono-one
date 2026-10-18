@@ -1,0 +1,8 @@
+{
+  "name": "system-api",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/system-api/src",
+  "tags": ["type:api", "scope:system"],
+  "targets": { "typecheck": {} }
+}

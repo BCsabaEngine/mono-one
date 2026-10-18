@@ -13,6 +13,10 @@ export default defineConfig({
 		})
 	],
 	resolve: { tsconfigPaths: true },
+	build: {
+		// `@api/<svc>` also exports the owning service's router; web only needs the contract, so drop the router modules from the bundle
+		rolldownOptions: { treeshake: { moduleSideEffects: id => !/libs\/[^/]+-api\/src\/server\.ts$/.test(id) } }
+	},
 	clearScreen: false, // keep the output of the other apps visible
 	server: { port: 3000 }
 })

@@ -2,3 +2,4 @@
 CREATE DATABASE mono_customer;
 CREATE DATABASE mono_order;
 CREATE DATABASE mono_document;
+CREATE DATABASE mono_system;
