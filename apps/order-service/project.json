@@ -6,39 +6,13 @@
   "tags": ["type:app", "scope:order"],
   "targets": {
     "typecheck": {},
-    "serve": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx watch --tsconfig apps/order-service/tsconfig.json --env-file-if-exists=apps/order-service/.env apps/order-service/src/main.ts"
-      }
-    },
+    "serve": {},
     "build": {
       "executor": "@nx/esbuild:esbuild"
     },
-    "dev:migrate": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "drizzle-kit push --config apps/order-service/src/db/drizzle.config.ts",
-        "envFile": "apps/order-service/.env"
-      }
-    },
-    "seed": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx --tsconfig apps/order-service/tsconfig.json --env-file-if-exists=apps/order-service/.env apps/order-service/src/seed.ts"
-      }
-    },
-    "db-generate": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "drizzle-kit generate --config apps/order-service/src/db/drizzle.config.ts"
-      }
-    },
-    "docker-build": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "docker build -f apps/order-service/Dockerfile -t mono-one/order-service:latest ."
-      }
-    }
+    "dev:migrate": {},
+    "seed": {},
+    "db-generate": {},
+    "docker-build": {}
   }
 }

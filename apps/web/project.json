@@ -7,10 +7,13 @@
 	"targets": {
 		"typecheck": {
 			"executor": "nx:run-commands",
+			"cache": true,
+			"dependsOn": ["^typecheck"],
 			"options": { "command": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json", "cwd": "apps/web" }
 		},
 		"serve": {
 			"executor": "nx:run-commands",
+			"continuous": true,
 			"options": {
 				"command": "node --env-file-if-exists=.env ../../node_modules/vite/bin/vite.js dev",
 				"cwd": "apps/web"
@@ -21,9 +24,6 @@
 			"outputs": ["{workspaceRoot}/dist/apps/web"],
 			"options": { "command": "vite build", "cwd": "apps/web" }
 		},
-		"docker-build": {
-			"executor": "nx:run-commands",
-			"options": { "command": "docker build -f apps/web/Dockerfile -t mono-one/web:latest ." }
-		}
+		"docker-build": {}
 	}
 }

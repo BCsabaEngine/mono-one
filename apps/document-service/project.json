@@ -6,33 +6,12 @@
   "tags": ["type:app", "scope:document"],
   "targets": {
     "typecheck": {},
-    "serve": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx watch --tsconfig apps/document-service/tsconfig.json --env-file-if-exists=apps/document-service/.env apps/document-service/src/main.ts"
-      }
-    },
+    "serve": {},
     "build": {
       "executor": "@nx/esbuild:esbuild"
     },
-    "dev:migrate": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "drizzle-kit push --config apps/document-service/src/db/drizzle.config.ts",
-        "envFile": "apps/document-service/.env"
-      }
-    },
-    "db-generate": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "drizzle-kit generate --config apps/document-service/src/db/drizzle.config.ts"
-      }
-    },
-    "docker-build": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "docker build -f apps/document-service/Dockerfile -t mono-one/document-service:latest ."
-      }
-    }
+    "dev:migrate": {},
+    "db-generate": {},
+    "docker-build": {}
   }
 }

@@ -6,39 +6,13 @@
   "tags": ["type:app", "scope:customer"],
   "targets": {
     "typecheck": {},
-    "serve": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx watch --tsconfig apps/customer-service/tsconfig.json --env-file-if-exists=apps/customer-service/.env apps/customer-service/src/main.ts"
-      }
-    },
+    "serve": {},
     "build": {
       "executor": "@nx/esbuild:esbuild"
     },
-    "dev:migrate": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "drizzle-kit push --config apps/customer-service/src/db/drizzle.config.ts",
-        "envFile": "apps/customer-service/.env"
-      }
-    },
-    "seed": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx --tsconfig apps/customer-service/tsconfig.json --env-file-if-exists=apps/customer-service/.env apps/customer-service/src/seed.ts"
-      }
-    },
-    "db-generate": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "drizzle-kit generate --config apps/customer-service/src/db/drizzle.config.ts"
-      }
-    },
-    "docker-build": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "docker build -f apps/customer-service/Dockerfile -t mono-one/customer-service:latest ."
-      }
-    }
+    "dev:migrate": {},
+    "seed": {},
+    "db-generate": {},
+    "docker-build": {}
   }
 }

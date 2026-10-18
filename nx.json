@@ -5,22 +5,35 @@
     "production": [
       "default",
       "!{projectRoot}/**/*.spec.ts",
-      "!{projectRoot}/**/*.test.ts"
+      "!{projectRoot}/**/*.test.ts",
+      "!{projectRoot}/vitest.config.ts",
+      "!{projectRoot}/src/seed.ts",
+      "!{projectRoot}/src/db/seed.ts",
+      "!{projectRoot}/Dockerfile",
+      "!{projectRoot}/.env.example",
+      "!{projectRoot}/**/*.md",
+      "!{workspaceRoot}/libs/testing.ts",
+      "!{workspaceRoot}/libs/seeding.ts"
     ],
     "sharedGlobals": [
       "{workspaceRoot}/tsconfig.base.json",
       "{workspaceRoot}/libs/*.ts",
       "{workspaceRoot}/libs/trpc/**/*",
-      "{workspaceRoot}/libs/migrations/**/*",
-      "{workspaceRoot}/package.json",
-      "{workspaceRoot}/eslint.config.mjs"
+      "{workspaceRoot}/libs/migrations/**/*"
     ]
   },
   "plugins": [
-    { "plugin": "@nx/eslint/plugin", "options": { "targetName": "lint" } },
+    {
+      "plugin": "@nx/eslint/plugin",
+      "options": {
+        "targetName": "lint"
+      }
+    },
     {
       "plugin": "@nx/vitest",
-      "options": { "testTargetName": "test" },
+      "options": {
+        "testTargetName": "test"
+      },
       "exclude": ["apps/web/**"]
     }
   ],
@@ -69,7 +82,9 @@
           }
         ],
         "esbuildOptions": {
-          "outExtension": { ".js": ".mjs" },
+          "outExtension": {
+            ".js": ".mjs"
+          },
           "banner": {
             "js": "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"
           }
@@ -77,10 +92,37 @@
       }
     },
     "serve": {
-      "continuous": true
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "tsx watch --tsconfig {projectRoot}/tsconfig.json --env-file-if-exists={projectRoot}/.env {projectRoot}/src/main.ts"
+      }
     },
     "docker-build": {
-      "dependsOn": ["build"]
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "command": "docker build -f {projectRoot}/Dockerfile -t mono-one/{projectName}:latest ."
+      }
+    },
+    "seed": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig {projectRoot}/tsconfig.json --env-file-if-exists={projectRoot}/.env {projectRoot}/src/seed.ts"
+      }
+    },
+    "dev:migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "drizzle-kit push --config {projectRoot}/src/db/drizzle.config.ts",
+        "envFile": "{projectRoot}/.env"
+      }
+    },
+    "db-generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "drizzle-kit generate --config {projectRoot}/src/db/drizzle.config.ts"
+      }
     }
   },
   "defaultBase": "main",
