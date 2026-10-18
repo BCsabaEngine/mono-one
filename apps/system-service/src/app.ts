@@ -14,7 +14,8 @@ export const createApp = (config: Config, log: Logger) => {
     trpc: { router: appRouter, createContext: createContext(container) },
     events: {
       router: eventsRouter,
-      createContext: headers => baseContextFromHeaders(headers, log)
+      createContext: headers =>
+        baseContextFromHeaders(headers, log, config.SERVICE_ID)
     },
     ready: container.cradle.database.ping
   })

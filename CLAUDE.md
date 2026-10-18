@@ -76,7 +76,7 @@ libs/
 
 - Libs are source-consumed (not buildable); path mappings live in `tsconfig.base.json`; `apps/web/tsconfig.json` repeats them (relative to itself) because it extends `$app/tsconfig`, not the base, so a new alias goes into both files. No `baseUrl` (deprecated in TS 6); entries start with `./`.
 - `*-api` libs hold the contract (`contract.ts`) and the router (`server.ts`) and have one entry point, `@api/<svc>` (`@api/*` maps to `libs/*-api/src/index.ts`; contract re-exports, `AppRouter` type, plus `appRouter` and the context type, which ESLint restricts to the owning service app). The router never imports from an app, so the Nx graph stays acyclic.
-- Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, request-ID child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `seedIds` (shared seed-id scale 1..100 per entity), `seeding` (seeder bootstrap), `testing` (Testcontainers helpers, tests only).
+- Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, trace child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `seedIds` (shared seed-id scale 1..100 per entity), `seeding` (seeder bootstrap), `testing` (Testcontainers helpers, tests only). `libs/tsconfig.json` (extends the base, includes `*.ts`, `trpc`, `migrations`) exists only so the editor resolves `@types/node` for them; no Nx target uses it.
 
 ### Boundaries (root `eslint.config.mjs`)
 
@@ -93,11 +93,11 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 ```
 
 - Business logic in `services/` implements the ports from `<svc>-api` (`contract.ts`, imported type-only); routers (in `<svc>-api`) validate input with the contract schemas and delegate through `ctx.services`.
-- **Awilix**: root container at startup, a scoped container per request in `createContext` (carries the request-ID logger). Services get dependencies from the cradle and never import the container. The pg pool is disposed by `container.dispose()` on shutdown.
+- **Awilix**: root container at startup, a scoped container per request in `createContext` (carries the trace logger). Services get dependencies from the container's `Dependencies` and never import the container: each dependency is a `private readonly` field assigned from the destructured constructor argument (`constructor({ database, log }: Pick<Dependencies, 'database' | 'log'>)`), no `deps` bag. The pg pool is disposed by `container.dispose()` on shutdown.
 - **Errors**: throw `DomainError` (`@lib/errors`); mapped to `TRPCError` in one place (`createTRPC` in `libs/trpc`). Unknown errors are logged and masked. Downstream tRPC errors are re-raised with their code by `fromClientError`.
-- **Logging**: one pino child logger per request with a request ID, forwarded in `x-request-id` on service calls.
+- **Logging**: one pino child logger per request (`withTrace`) with `traceId`, `callChain` (e.g. `web>order-service>customer-service`) and `userId` (JWT `sub`, when there is an identity). `traceId` is taken from the incoming `x-trace-id` header if it matches `^[\w-]{8,64}$`, else generated (web accepts it from the browser too); `x-call-chain` carries the services passed so far and each service appends its own `SERVICE_ID` in `baseContextFromHeaders`. Both are forwarded on every service call (`callContextOf(ctx)`). The `createTRPC` middleware logs one `rpc` line per procedure call (`path`, `ok`, `code`, `ms`), so `grep <traceId>` across the services shows the whole chain. Events carry no JWT: the envelope has `traceId` and an optional `userId` (log correlation only), the call chain travels in the header. Do not log another field called `userId` for a different user (use e.g. `targetUserId`).
 - **Health**: `/healthz` (liveness), `/readyz` (Postgres ping). Graceful shutdown on SIGTERM/SIGINT: stop accepting, drain, close the pool.
-- **Service clients** (`createServiceClient`) use `httpLink` with a per-call context `{ jwt, requestId }` and a timeout, not `httpBatchLink` (a batch would share one `authorization` header).
+- **Service clients** (`createServiceClient`) use `httpLink` with a per-call context `{ jwt, traceId, callChain }` and a timeout, not `httpBatchLink` (a batch would share one `authorization` header).
 
 ## Data rules
 
@@ -173,27 +173,28 @@ pnpm env:init           # creates missing apps/*/.env from .env.example (first r
 pnpm migrate            # nx run-many -t migrate --parallel=4 (run after dev:infra and after pulling schema changes)
 pnpm seed               # nx run-many -t seed: wipes customer + order data and inserts demo rows (ids from libs/seedIds.ts); dev only
 pnpm dev                # nx run-many -t serve: web + services with reload, prefixed output (no migrations)
-pnpm all                # format + lint (both write/--fix) + typecheck + build (no tests); use format:check/lint:check for a read-only run
+pnpm all                # format + lint (both write/--fix) + typecheck + test + build (test needs Docker); use format:check/lint:check for a read-only run
 pnpm lint               # eslint --fix on all projects + the @lib helpers (not an Nx project)
 pnpm lint:check         # same without --fix (what CI runs)
 pnpm format             # nx format:write (Prettier)
 pnpm format:check       # nx format:check (what CI runs)
 pnpm nx run-many -t typecheck test build   # before finishing any change, together with `pnpm format` and `pnpm lint` (test needs Docker)
 pnpm nx test <project> -- <file-filter> -t "<test name>"   # single test file/case; args after `--` go to `vitest run` (service tests need Docker)
+pnpm test               # nx run-many -t test with streamed output (cached runs replay their logs); pnpm test:force skips the Nx cache
 pnpm nx affected -t lint typecheck test --base=main
 pnpm nx graph
 pnpm nx db-generate <svc>
 pnpm nx run-many -t build && docker compose up -d --build   # full stack in Docker, web on :3000
 ```
 
-- `pnpm dev` is `NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream` (`serve` is `continuous` in `nx.json`; `--output-style` keeps Nx out of the TUI and prefixes each line with the project). The env var is required: in a real terminal Nx otherwise runs each app in its own pseudo-terminal (raw mode, no carriage returns), which makes the interleaved output stair-step and garbled. `pnpm migrate` is a sequential `nx run-many -t migrate`. `nx serve <app>` runs one app.
+- `pnpm test` / `pnpm test:force` use the same env var and `--output-style=stream` for the same reason. `pnpm dev` is `NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream` (`serve` is `continuous` in `nx.json`; `--output-style` keeps Nx out of the TUI and prefixes each line with the project). The env var is required: in a real terminal Nx otherwise runs each app in its own pseudo-terminal (raw mode, no carriage returns), which makes the interleaved output stair-step and garbled. `pnpm migrate` is a sequential `nx run-many -t migrate`. `nx serve <app>` runs one app.
 - Config is env-driven and Zod-validated at startup (`.env.example` per app). Core services need `DATABASE_URL`; service URLs default to `localhost:300x`.
 
 ## Docker and CI
 
 - Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) stays external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
 - `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, one-off migration jobs, the three services and `web`.
-- CI (`.github/workflows/ci.yml`, Node from `.nvmrc`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test`, `build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
+- CI (`.github/workflows/ci.yml`, Node from `.nvmrc`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
 
 ## Affected builds
 

@@ -1,12 +1,20 @@
 import { createTRPCClient, httpLink } from '@trpc/client'
 import type { TRPCLink } from '@trpc/client'
 import type { AnyTRPCRouter } from '@trpc/server'
-import { REQUEST_ID_HEADER, SERVICE_ID_HEADER } from './context'
+import {
+  CALL_CHAIN_HEADER,
+  SERVICE_ID_HEADER,
+  TRACE_ID_HEADER
+} from './context'
 
 export interface CallContext {
   /** End user's JWT; pass it only when the callee needs the user's identity. */
   jwt?: string
-  requestId?: string
+  traceId?: string
+  /** Chain including the calling service; the callee appends itself. */
+  callChain?: string[]
+  /** Not sent as a header (the JWT carries it); events put it in the envelope. */
+  userId?: string
 }
 
 export const fetchWithTimeout =
@@ -14,12 +22,15 @@ export const fetchWithTimeout =
   (input, init) =>
     fetch(input, {
       ...init,
-      signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(init?.signal ? [init.signal] : [])])
+      signal: AbortSignal.any([
+        AbortSignal.timeout(timeoutMs),
+        ...(init?.signal ? [init.signal] : [])
+      ])
     })
 
 /**
  * Typed service-to-service client. Per-call identity goes through the tRPC call context:
- * `client.x.query(input, { context: { jwt: ctx.jwt, requestId: ctx.requestId } satisfies CallContext })`.
+ * `client.x.query(input, { context: callContextOf(ctx) })`.
  * Uses httpLink (not httpBatchLink) because batched calls would share one authorization header.
  */
 export const createServiceClient = <R extends AnyTRPCRouter>(opts: {
@@ -33,10 +44,13 @@ export const createServiceClient = <R extends AnyTRPCRouter>(opts: {
         url: opts.url,
         fetch: fetchWithTimeout(opts.timeoutMs),
         headers: ({ op }) => {
-          const { jwt, requestId } = (op.context ?? {}) as CallContext
+          const { jwt, traceId, callChain } = (op.context ?? {}) as CallContext
           return {
             [SERVICE_ID_HEADER]: opts.serviceId,
-            ...(requestId && { [REQUEST_ID_HEADER]: requestId }),
+            ...(traceId && { [TRACE_ID_HEADER]: traceId }),
+            ...(callChain?.length && {
+              [CALL_CHAIN_HEADER]: callChain.join(',')
+            }),
             ...(jwt && { authorization: `Bearer ${jwt}` })
           }
         }

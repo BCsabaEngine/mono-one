@@ -1,7 +1,6 @@
-import { randomUUID } from 'node:crypto'
 import type { Cookies } from '@sveltejs/kit'
-import { decodeJwt } from '@lib/trpc'
-import type { BaseContext, CallContext } from '@lib/trpc'
+import { baseContextFromHeaders, callContextOf } from '@lib/trpc'
+import type { BaseContext } from '@lib/trpc'
 import { getServices } from '../services'
 
 export interface WebContext extends BaseContext {
@@ -11,22 +10,16 @@ export interface WebContext extends BaseContext {
 	sessionId?: string
 }
 
-export const createWebContext = (locals: App.Locals, cookies: Cookies): WebContext => {
+// the trace id comes from the browser's x-trace-id header or is generated; the JWT comes from the Redis session
+export const createWebContext = (locals: App.Locals, cookies: Cookies, headers: Headers): WebContext => {
 	const services = getServices()
-	const requestId = randomUUID()
-	const identity = locals.jwt ? decodeJwt(locals.jwt) : undefined
 	return {
+		...baseContextFromHeaders(headers, services.log, services.config.SERVICE_ID, locals.jwt),
 		services,
 		cookies,
-		requestId,
-		log: services.log.child({ requestId }),
-		...(locals.sessionId && { sessionId: locals.sessionId }),
-		...(locals.jwt && { jwt: locals.jwt }),
-		...(identity && { identity })
+		...(locals.sessionId && { sessionId: locals.sessionId })
 	}
 }
 
-/** Identity and request id forwarded on every downstream call. */
-export const callContext = (ctx: WebContext) => ({
-	context: { requestId: ctx.requestId, ...(ctx.jwt && { jwt: ctx.jwt }) } satisfies CallContext
-})
+/** Identity and trace data forwarded on every downstream call. */
+export const callContext = (ctx: WebContext) => ({ context: callContextOf(ctx) })

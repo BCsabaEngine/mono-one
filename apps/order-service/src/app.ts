@@ -4,7 +4,7 @@ import { appRouter } from '@api/order'
 import type { Config } from './config'
 import { asValue } from 'awilix'
 import { buildContainer } from './container'
-import type { Cradle } from './container'
+import type { Dependencies } from './container'
 import { eventsRouter } from './events'
 import { createContext } from './trpc/context'
 
@@ -12,14 +12,20 @@ import { createContext } from './trpc/context'
 export const createApp = (
   config: Config,
   log: Logger,
-  overrides: Partial<Pick<Cradle, 'customerClient' | 'publisher'>> = {}
+  overrides: Partial<Pick<Dependencies, 'customerClient' | 'publisher'>> = {}
 ) => {
   const container = buildContainer(config, log)
-  Object.entries(overrides).forEach(([name, value]) => container.register({ [name]: asValue(value) }))
+  Object.entries(overrides).forEach(([name, value]) =>
+    container.register({ [name]: asValue(value) })
+  )
   const server = createServiceServer({
     log,
     trpc: { router: appRouter, createContext: createContext(container) },
-    events: { router: eventsRouter, createContext: headers => baseContextFromHeaders(headers, log) },
+    events: {
+      router: eventsRouter,
+      createContext: headers =>
+        baseContextFromHeaders(headers, log, config.SERVICE_ID)
+    },
     ready: container.cradle.database.ping
   })
   return { container, server }

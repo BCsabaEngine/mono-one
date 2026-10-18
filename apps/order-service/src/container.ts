@@ -1,4 +1,10 @@
-import { asClass, asFunction, asValue, createContainer, InjectionMode } from 'awilix'
+import {
+  asClass,
+  asFunction,
+  asValue,
+  createContainer,
+  InjectionMode
+} from 'awilix'
 import { createDb } from '@lib/db'
 import type { Logger } from '@lib/logging'
 import { createServiceClient } from '@lib/trpc'
@@ -8,7 +14,7 @@ import type { Config } from './config'
 import * as schema from './db/schema'
 import { OrdersServiceImpl } from './services/orders'
 
-export interface Cradle {
+export interface Dependencies {
   config: Config
   log: Logger
   database: ReturnType<typeof createDb<typeof schema>>
@@ -19,20 +25,24 @@ export interface Cradle {
 
 /** Root container; the pg pool is disposed through container.dispose() on shutdown. */
 export const buildContainer = (config: Config, log: Logger) =>
-  createContainer<Cradle>({ injectionMode: InjectionMode.PROXY }).register({
+  createContainer<Dependencies>({
+    injectionMode: InjectionMode.PROXY
+  }).register({
     config: asValue(config),
     log: asValue(log),
-    database: asFunction(({ config, log }: Cradle) => createDb(config, log, schema))
+    database: asFunction(({ config, log }: Dependencies) =>
+      createDb(config, log, schema)
+    )
       .singleton()
       .disposer(d => d.close()),
-    customerClient: asFunction(({ config }: Cradle) =>
+    customerClient: asFunction(({ config }: Dependencies) =>
       createServiceClient<CustomerAppRouter>({
         url: `${config.CUSTOMER_SERVICE_URL}/trpc`,
         serviceId: config.SERVICE_ID,
         timeoutMs: config.REQUEST_TIMEOUT_MS
       })
     ).singleton(),
-    publisher: asFunction(({ config, log }: Cradle) =>
+    publisher: asFunction(({ config, log }: Dependencies) =>
       createPublisher({
         serviceId: 'order-service',
         urls: serviceUrls(config),

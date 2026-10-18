@@ -58,7 +58,7 @@
         "format": ["esm"],
         "bundle": true,
         "thirdParty": true,
-        "sourcemap": true,
+        "sourcemap": false,
         "skipTypeCheck": true,
         "external": ["pg-native"],
         "assets": [

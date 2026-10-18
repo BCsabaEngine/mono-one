@@ -10,7 +10,7 @@ import type {
   User,
   UsersService
 } from '@api/system'
-import type { Cradle } from '../container'
+import type { Dependencies } from '../container'
 import { permission, user } from '../db/schema'
 import type * as schema from '../db/schema'
 import { hashPassword, verifyPassword } from './password'
@@ -28,10 +28,16 @@ const isUniqueViolation = (err: unknown): boolean =>
     : 'cause' in err && isUniqueViolation(err.cause))
 
 export class UsersServiceImpl implements UsersService {
-  constructor(private readonly deps: Pick<Cradle, 'database' | 'log'>) {}
+  private readonly database: Dependencies['database']
+  private readonly log: Dependencies['log']
+
+  constructor({ database, log }: Pick<Dependencies, 'database' | 'log'>) {
+    this.database = database
+    this.log = log
+  }
 
   private get db() {
-    return this.deps.database.db
+    return this.database.db
   }
 
   /** Users with their permissions in two queries (no N+1), in the order of `ids`; unknown ids are omitted. */
@@ -85,7 +91,7 @@ export class UsersServiceImpl implements UsersService {
 
   async add({ email, name, password, permissions }: AddUserInput) {
     try {
-      const id = await this.deps.database.withTransaction(async tx => {
+      const id = await this.database.withTransaction(async tx => {
         const [row] = await tx
           .insert(user)
           .values({
@@ -103,7 +109,7 @@ export class UsersServiceImpl implements UsersService {
             )
         return row.id
       })
-      this.deps.log.info({ userId: id }, 'user added')
+      this.log.info({ targetUserId: id }, 'user added')
       return await this.loadOne(id)
     } catch (err) {
       throw isUniqueViolation(err) ? conflict('Email already registered') : err
@@ -111,7 +117,7 @@ export class UsersServiceImpl implements UsersService {
   }
 
   async update({ id, name, permissions, password }: UpdateUserInput) {
-    return this.deps.database.withTransaction(async tx => {
+    return this.database.withTransaction(async tx => {
       const [existing] = await tx
         .select({ deleted: user.deleted })
         .from(user)
@@ -135,7 +141,7 @@ export class UsersServiceImpl implements UsersService {
               [...new Set(permissions)].map(name => ({ userId: id, name }))
             )
       }
-      this.deps.log.info({ userId: id }, 'user updated')
+      this.log.info({ targetUserId: id }, 'user updated')
       return this.loadOne(id, tx)
     })
   }
@@ -150,7 +156,7 @@ export class UsersServiceImpl implements UsersService {
       .update(user)
       .set({ deleted: new Date(), updated: new Date() })
       .where(and(eq(user.id, id), isNull(user.deleted)))
-    this.deps.log.info({ userId: id }, 'user deleted')
+    this.log.info({ targetUserId: id }, 'user deleted')
     return { id }
   }
 }

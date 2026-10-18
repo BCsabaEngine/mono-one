@@ -8,7 +8,7 @@ const handler: RequestHandler = ({ request, locals, cookies }) =>
 		endpoint: '/trpc',
 		req: request,
 		router: webRouter,
-		createContext: () => createWebContext(locals, cookies)
+		createContext: () => createWebContext(locals, cookies, request.headers)
 	})
 
 export { handler as GET, handler as POST }

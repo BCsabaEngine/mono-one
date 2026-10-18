@@ -12,7 +12,11 @@ export const createApp = (config: Config, log: Logger) => {
   const server = createServiceServer({
     log,
     trpc: { router: appRouter, createContext: createContext(container) },
-    events: { router: eventsRouter, createContext: headers => baseContextFromHeaders(headers, log) },
+    events: {
+      router: eventsRouter,
+      createContext: headers =>
+        baseContextFromHeaders(headers, log, config.SERVICE_ID)
+    },
     ready: container.cradle.database.ping
   })
   return { container, server }

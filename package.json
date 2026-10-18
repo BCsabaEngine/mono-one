@@ -18,9 +18,10 @@
     "format": "nx format:write",
     "format:check": "nx format:check",
     "typecheck": "nx run-many -t typecheck",
-    "test": "nx run-many -t test",
+    "test": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t test --output-style=stream",
+    "test:force": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t test --output-style=stream --skip-nx-cache",
     "build": "nx run-many -t build",
-    "all": "pnpm format && pnpm lint && pnpm typecheck && pnpm build"
+    "all": "pnpm format && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "@trpc/client": "11.19.0",

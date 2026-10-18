@@ -60,16 +60,17 @@ export const createPublisher = <S extends ServiceId>({
   const publish = async <T extends EventsOwnedBy<S>>(
     type: T,
     payload: EventOf<T>['payload'],
-    opts: { requestId?: string } = {}
+    opts: { traceId?: string; callChain?: string[]; userId?: string } = {}
   ): Promise<PublishResult> => {
     const def = EVENTS[type]
-    const requestId = opts.requestId ?? randomUUID()
+    const traceId = opts.traceId ?? randomUUID()
     const event = def.schema.parse({
       id: randomUUID(),
       type,
       version: 1,
       occurredAt: new Date().toISOString(),
-      requestId,
+      traceId,
+      ...(opts.userId && { userId: opts.userId }),
       payload
     })
     const started = performance.now()
@@ -78,7 +79,10 @@ export const createPublisher = <S extends ServiceId>({
       subscribers.map(s =>
         client(s)
           .events.deliver.mutate(event, {
-            context: { requestId } satisfies CallContext
+            context: {
+              traceId,
+              callChain: opts.callChain
+            } satisfies CallContext
           })
           .then(() => s)
       )
@@ -96,7 +100,7 @@ export const createPublisher = <S extends ServiceId>({
         (failures.get(`${type}:${subscriber}`) ?? 0) + 1
       )
       log.warn(
-        { eventType: type, subscriber, requestId, error },
+        { eventType: type, subscriber, traceId, error },
         'event delivery failed'
       )
     })
@@ -104,7 +108,7 @@ export const createPublisher = <S extends ServiceId>({
       {
         eventId: event.id,
         eventType: type,
-        requestId,
+        traceId,
         ...result,
         ms: Math.round(performance.now() - started)
       },
@@ -152,12 +156,20 @@ export const createEventsRouter = <S extends ServiceId>(
           const parsed = def.schema.safeParse(input)
           if (!parsed.success)
             throw badRequest(`invalid ${input.type} event`, parsed.error.issues)
+          // events carry no JWT, so the envelope's userId is the only way to keep it in the handler's logs
+          const handlerCtx = input.userId
+            ? {
+                ...ctx,
+                userId: input.userId,
+                log: ctx.log.child({ userId: input.userId })
+              }
+            : ctx
           await (
             handlers as Record<
               string,
               (e: unknown, c: BaseContext) => void | Promise<void>
             >
-          )[input.type]!(parsed.data, ctx)
+          )[input.type]!(parsed.data, handlerCtx)
           return { ok: true as const }
         })
     })

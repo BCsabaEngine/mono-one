@@ -14,6 +14,7 @@ export default defineConfig({
 	],
 	resolve: { tsconfigPaths: true },
 	build: {
+		sourcemap: false, // SvelteKit defaults the server build to true; no .map files in dist
 		// `@api/<svc>` also exports the owning service's router; web only needs the contract, so drop the router modules from the bundle
 		rolldownOptions: { treeshake: { moduleSideEffects: id => !/libs\/[^/]+-api\/src\/server\.ts$/.test(id) } }
 	},

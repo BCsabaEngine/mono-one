@@ -5,6 +5,7 @@ import { createHTTPHandler } from '@trpc/server/adapters/standalone'
 import { afterEach, describe, expect, it } from 'vitest'
 import { pino } from 'pino'
 import { baseContextFromHeaders, createServiceClient } from '@lib/trpc'
+import type { BaseContext } from '@lib/trpc'
 import type { EventsRouter, ServiceId } from './contract'
 import { createEventsRouter, createPublisher } from './client'
 import type { ServiceUrls } from './client'
@@ -19,13 +20,14 @@ const servers: Server[] = []
 
 const subscriber = async (
   serviceId: 'document-service' | 'web',
-  onEvent: (e: { type: string }) => void | Promise<void>
+  onEvent: (e: { type: string }, ctx: BaseContext) => void | Promise<void>
 ) => {
   const router = createEventsRouter(serviceId, { 'order.placed': onEvent })
   const handler = createHTTPHandler({
     basePath: '/events/',
     router,
-    createContext: ({ req }) => baseContextFromHeaders(req.headers, log)
+    createContext: ({ req }) =>
+      baseContextFromHeaders(req.headers, log, serviceId)
   })
   const server = createServer(handler)
   servers.push(server)
@@ -65,6 +67,24 @@ describe('events-client', () => {
     expect(result.failed).toEqual([])
     expect(got.sort()).toEqual(['docs', 'web'])
     expect(Date.now() - started).toBeLessThan(1000)
+  })
+
+  it('hands the subscriber the trace id, call chain and user id of the publisher', async () => {
+    const seen: Pick<BaseContext, 'traceId' | 'callChain' | 'userId'>[] = []
+    const web = await subscriber('web', (_, ctx) => void seen.push(ctx))
+    const docs = await subscriber('document-service', () => undefined)
+    await publisher(urls(docs, web)).publish('order.placed', payload, {
+      traceId: 'trace-abcdef',
+      callChain: ['web', 'order-service'],
+      userId: 'user-1'
+    })
+    expect(seen).toMatchObject([
+      {
+        traceId: 'trace-abcdef',
+        callChain: ['web', 'order-service', 'web'],
+        userId: 'user-1'
+      }
+    ])
   })
 
   it('one failing subscriber does not affect the others, and the failure is counted', async () => {
@@ -131,7 +151,7 @@ describe('events-client', () => {
       type: 'order.placed',
       version: 1,
       occurredAt: new Date().toISOString(),
-      requestId: 'r',
+      traceId: 'trace-0001',
       payload
     }
     await expect(
@@ -156,7 +176,7 @@ describe('events-client', () => {
       type: 'order.placed',
       version: 1,
       occurredAt: new Date().toISOString(),
-      requestId: 'r',
+      traceId: 'trace-0001',
       payload: { orderId: 'nope' }
     }
     await expect(client.events.deliver.mutate(bad)).rejects.toMatchObject({

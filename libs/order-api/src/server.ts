@@ -1,4 +1,4 @@
-import { createTRPC, requireIdentity } from '@lib/trpc'
+import { callContextOf, createTRPC, requireIdentity } from '@lib/trpc'
 import type { BaseContext } from '@lib/trpc'
 import { orderSchema, placeOrderInput } from './contract'
 import type { OrdersService } from './contract'
@@ -17,7 +17,7 @@ export const appRouter = router({
       .mutation(
         ({ input, ctx }) => (
           requireIdentity(ctx),
-          ctx.services.orders.place(input, { requestId: ctx.requestId, ...(ctx.jwt && { jwt: ctx.jwt }) })
+          ctx.services.orders.place(input, callContextOf(ctx))
         )
       )
   })

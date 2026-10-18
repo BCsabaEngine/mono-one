@@ -16,7 +16,9 @@ export const baseEnvelope = z.object({
   type: z.string(),
   version: z.number().int(),
   occurredAt: z.iso.datetime(),
-  requestId: z.string(),
+  traceId: z.string(),
+  /** Caller's user for log correlation only; events never carry the JWT. */
+  userId: z.string().optional(),
   payload: z.unknown()
 })
 export type BaseEnvelope = z.infer<typeof baseEnvelope>

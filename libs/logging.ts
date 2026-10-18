@@ -29,5 +29,20 @@ export const createLogger = ({
     }
   })
 
-export const withRequestId = (log: Logger, requestId: string): Logger =>
-  log.child({ requestId })
+export interface TraceFields {
+  traceId: string
+  /** services the request passed through so far, caller first, this service last */
+  callChain: string[]
+  userId?: string | undefined
+}
+
+/** Child logger carrying the correlation fields: `callChain` is logged as `web>order-service`. */
+export const withTrace = (
+  log: Logger,
+  { traceId, callChain, userId }: TraceFields
+): Logger =>
+  log.child({
+    traceId,
+    callChain: callChain.join('>'),
+    ...(userId && { userId })
+  })

@@ -15,5 +15,5 @@ export const POST: RequestHandler = ({ request }) =>
 		endpoint: '/events',
 		req: request,
 		router: eventsRouter,
-		createContext: () => baseContextFromHeaders(request.headers, getServices().log)
+		createContext: () => baseContextFromHeaders(request.headers, getServices().log, getServices().config.SERVICE_ID)
 	})

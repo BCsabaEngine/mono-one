@@ -12,7 +12,7 @@ import type { CallContext } from '@lib/trpc'
 import type { AppRouter } from '@api/order'
 import { createApp } from './app'
 import type { Config } from './config'
-import type { Cradle } from './container'
+import type { Dependencies } from './container'
 import { orders } from './db/schema'
 import { seed } from './db/seed'
 
@@ -26,14 +26,14 @@ const published: unknown[][] = []
 // customer-service is faked at the client boundary; the real call is covered by its own contract/tests
 const customerClient = {
   customers: { get: { query: async () => customer } }
-} as unknown as Cradle['customerClient']
+} as unknown as Dependencies['customerClient']
 const publisher = {
   publish: async (...args: unknown[]) => (
     published.push(args),
     { delivered: [], failed: [] }
   ),
   failedDeliveries: () => ({})
-} as unknown as Cradle['publisher']
+} as unknown as Dependencies['publisher']
 
 describe('order-service (real Postgres)', () => {
   let pg: Awaited<ReturnType<typeof startPostgres>>
@@ -66,7 +66,9 @@ describe('order-service (real Postgres)', () => {
 
   it('places an order, stores it and publishes order.placed', async () => {
     const context = {
-      jwt: unsignedJwt({ sub: 'user-1' })
+      jwt: unsignedJwt({ sub: 'user-1' }),
+      traceId: 'trace-abcdef',
+      callChain: ['web']
     } satisfies CallContext
     const order = await client.orders.place.mutate(
       { customerId: customer.id, totalCents: 1990 },
@@ -82,8 +84,37 @@ describe('order-service (real Postgres)', () => {
       [
         'order.placed',
         { orderId: order.id, customerId: customer.id, totalCents: 1990 },
-        expect.any(Object)
+        {
+          traceId: 'trace-abcdef',
+          callChain: ['web', 'order-service'],
+          userId: 'user-1'
+        }
       ]
+    ])
+  })
+
+  it('generates a trace id when the caller sends none or a malformed one', async () => {
+    published.length = 0
+    const jwt = unsignedJwt({ sub: 'user-1' })
+    await client.orders.place.mutate(
+      { customerId: customer.id, totalCents: 5 },
+      { context: { jwt, traceId: 'x y!' } satisfies CallContext }
+    )
+    await client.orders.place.mutate(
+      { customerId: customer.id, totalCents: 5 },
+      { context: { jwt } }
+    )
+    expect(published.map(([, , opts]) => opts)).toEqual([
+      {
+        traceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        callChain: ['order-service'],
+        userId: 'user-1'
+      },
+      {
+        traceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        callChain: ['order-service'],
+        userId: 'user-1'
+      }
     ])
   })
 
