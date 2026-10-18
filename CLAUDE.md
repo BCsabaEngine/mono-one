@@ -37,16 +37,16 @@ Directions: `web` -> all four, `order-service` -> `customer-service`. Demo data:
 
 ## Stack
 
-| Area                          | Choice                                                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Monorepo                      | Nx 23 + pnpm, one root `package.json` and lockfile                                                            |
-| Frontend + BFF                | SvelteKit 3 (Svelte 5), adapter-node                                                                          |
-| Core services                 | plain Node + tRPC (`createHTTPHandler` on `node:http`), Awilix DI                                             |
-| DB                            | PostgreSQL 18 + Drizzle ORM; migrations via drizzle-kit (SQL committed), applied by a separate `migrate` step |
-| Redis                         | `web` only, JWT storage (`jwt:<sid>`, TTL = token lifetime). Not used for events or queues                    |
-| Validation / config / logging | Zod 4, Zod-validated env (fail fast), pino                                                                    |
-| Tests                         | Vitest + Testcontainers (real Postgres)                                                                       |
-| Lint / format                 | ESLint 10 flat config (one root file), Prettier; `apps/web` has its own Prettier config                       |
+| Area                          | Choice                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------- |
+| Monorepo                      | Nx 23 + pnpm, one root `package.json` and lockfile                                                |
+| Frontend + BFF                | SvelteKit 3 (Svelte 5), adapter-node                                                              |
+| Core services                 | plain Node + tRPC (`createHTTPHandler` on `node:http`), Awilix DI                                 |
+| DB                            | PostgreSQL 18 + Drizzle ORM; schema applied with `drizzle-kit push` (no committed migrations yet) |
+| Redis                         | `web` only, JWT storage (`jwt:<sid>`, TTL = token lifetime). Not used for events or queues        |
+| Validation / config / logging | Zod 4, Zod-validated env (fail fast), pino                                                        |
+| Tests                         | Vitest + Testcontainers (real Postgres)                                                           |
+| Lint / format                 | ESLint 10 flat config (one root file), Prettier; `apps/web` has its own Prettier config           |
 
 ### Versions
 
@@ -103,7 +103,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 - Each service owns its database (separate `DATABASE_URL`, optional `DB_SCHEMA`); no service reads another's tables and there are no cross-service foreign keys. Cross-service data goes through tRPC. One pg pool per service with a deliberate size.
 - Each service keeps its Drizzle schema, migrations and one-line `drizzle.config.ts` in its own app. `drizzle.config.ts` imports `defineDrizzleConfig` by relative path because drizzle-kit ignores tsconfig paths.
-- Migrations run as a separate step (`pnpm nx run <svc>:migrate` (not `nx migrate`, that is Nx's built-in upgrade command), or `node migrate.mjs` in the image), under a Postgres advisory lock; the `__drizzle_migrations` table lives in the same schema as the tables (`DB_SCHEMA`, default `public`), not in drizzle's own `drizzle` schema. Change the schema, then `pnpm nx db-generate <svc>` and commit the SQL.
+- No service has committed migrations during development: `pnpm dev:migrate` / `pnpm nx dev:migrate <svc>` (local only; not `nx migrate`, that is Nx's built-in upgrade command) runs `drizzle-kit push`. The migration runner stays for later (`libs/migrations`: advisory-locked, `__drizzle_migrations` in the same schema as the tables (`DB_SCHEMA`, default `public`); `node migrate.mjs` in the image, `pnpm nx db-generate <svc>`). When migrations come back: generate and commit the SQL per service, add a real `migrate` target running `src/migrate.ts` (`dev:migrate` stays the local push) and re-add the compose migrate jobs.
 - **Seed data is code, never a migration.** `pnpm seed` / `pnpm nx seed <svc>` (tsx, not bundled into the images) wipes the service's tables and re-inserts deterministic demo rows; it refuses `NODE_ENV=production`. All seed ids come from `libs/seedIds.ts` (`seedId(entity, n)` / `seedIds(entity)`, n = 1..100, one UUID namespace per entity), so services reference each other's seed rows (an order's `customerId`) without reading each other's databases. New entity: add its prefix there; new seeded service: `src/db/seed.ts` (`seed(db)`) + `src/seed.ts` (`seedService`) + a `seed` target.
 
 ### Schema conventions (new schemas)
@@ -127,7 +127,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - `users.get` / `users.getMany` (1..100 ids, order kept, unknown ids omitted) also return soft-deleted users (the `deleted` date is in the DTO); `users.auth` and `users.update` reject them. DTOs never carry the password. `users.add` / `update` / `delete` need the `user.admin` permission (`requirePermission` in `libs/trpc`, from the JWT `permissions` claim); `users.auth` is the only call without an identity.
 - Its seed uses integer identities (restarted at 1: the starter user has id 1 with every permission), not `libs/seedIds.ts`, which is UUID-based; add a `seedIds` mapping only when another service must reference seed users.
 - The schema imports `PERMISSIONS` by relative path from a dependency-free file because drizzle-kit ignores tsconfig paths (same reason as `drizzle.config.ts`; the import carries an eslint-disable).
-- No committed migrations yet (see Migration workflow): create the tables with `pnpm migrate` (its `system-service:migrate` target runs `drizzle-kit push`, after `pnpm dev:infra`; an existing Postgres volume needs `CREATE DATABASE mono_system;` once because the init script only runs on an empty volume), then `pnpm nx seed system-service`. Tests create the tables with drizzle-kit's `pushSchema`. Compose has no `system-migrate` job; generate migrations and add it before deploying. `src/migrate.ts` (the image's `migrate.mjs`) exists only because the esbuild defaults bundle it; it needs generated migrations to be useful.
+- No committed migrations yet (see Migration workflow): create the tables with `pnpm dev:migrate` (every service's `dev:migrate` target runs `drizzle-kit push`, after `pnpm dev:infra`; an existing Postgres volume needs `CREATE DATABASE mono_system;` once because the init script only runs on an empty volume), then `pnpm nx seed system-service`. Tests create the tables with drizzle-kit's `pushSchema`. Compose has no migrate jobs; generate migrations and add them before deploying. `src/migrate.ts` (the image's `migrate.mjs`) exists only because the esbuild defaults bundle it; it needs generated migrations to be useful.
 
 ## Events (no bus, no persistence, no retry)
 
@@ -159,7 +159,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - Prefer Nx over custom scripts: use targets, executors, `targetDefaults` and `nx run-many` before writing a custom script (there is no `tools/` directory); a script needs a reason Nx cannot cover.
 - One root `package.json`, one `pnpm-lock.yaml`, no pnpm workspaces. `pnpm-workspace.yaml` only holds `allowBuilds` (pnpm 12 no longer reads the `pnpm` field) and declares no packages. `.npmrc`: `save-exact=true`. The only other `package.json` is `apps/web/package.json`.
 - Nx needs `@nx/js` to build project-graph edges from TS imports. `lint` and `test` are inferred by the `@nx/eslint/plugin` and `@nx/vitest` plugins in `nx.json` `plugins` (from the root `eslint.config.mjs` and each `vitest.config.ts`; a project without a vitest config has no `test` target, `apps/web` is excluded from the vitest plugin because loading its SvelteKit `vite.config.ts` from the workspace root fails; the `test` default only forces `vitest run` so it never enters watch mode; `test-ci` is deliberately off, since atomized per-file targets would start one Testcontainers Postgres per file). The other targets are `nx:run-commands` (and `@nx/esbuild:esbuild` for service `build`) defined in `nx.json` `targetDefaults` (`typecheck`, `serve`, the esbuild defaults) and per-project `project.json` (`serve`, `build`, `migrate`, `db-generate`, `docker-build`). `docker-build` depends on `build`.
-- `migrate` is the only root script that passes `--output-style=static` (Nx prints task logs inline instead of the TUI); `dev` uses `stream`.
+- `dev:migrate` is the only root script that passes `--output-style=static` (Nx prints task logs inline instead of the TUI); `dev` uses `stream`.
 - One root ESLint flat config covers everything, including the Svelte rules scoped to `apps/web` (`eslint-plugin-svelte`). Prettier: root config for services and libs; `apps/web` has its own (`prettier-plugin-svelte`, tabs), the nearest config wins.
 - Type-only imports are always top-level `import type { X }`, never `import { type X }` (`consistent-type-imports` with `separate-type-imports`, `no-import-type-side-effects`, and `no-restricted-syntax` banning inline `type` specifiers). `verbatimModuleSyntax` is on.
 - Code style: compact, arrow functions, no boilerplate; services single quotes, no semicolons; `apps/web` uses tabs.
@@ -170,7 +170,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 corepack enable && pnpm install
 pnpm dev:infra          # postgres + redis only (docker-compose.dev.yml); the full stack is docker-compose.yml
 pnpm env:init           # creates missing apps/*/.env from .env.example (first run only)
-pnpm migrate            # nx run-many -t migrate --parallel=4 (run after dev:infra and after pulling schema changes)
+pnpm dev:migrate        # nx run-many -t dev:migrate --parallel=4 (drizzle-kit push, local only) (run after dev:infra and after pulling schema changes)
 pnpm seed               # nx run-many -t seed: wipes customer + order data and inserts demo rows (ids from libs/seedIds.ts); dev only
 pnpm dev                # nx run-many -t serve: web + services with reload, prefixed output (no migrations)
 pnpm all                # format + lint (both write/--fix) + typecheck + test + build (test needs Docker); use format:check/lint:check for a read-only run
@@ -187,13 +187,13 @@ pnpm nx db-generate <svc>
 pnpm nx run-many -t build && docker compose up -d --build   # full stack in Docker, web on :3000
 ```
 
-- `pnpm test` / `pnpm test:force` use the same env var and `--output-style=stream` for the same reason. `pnpm dev` is `NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream` (`serve` is `continuous` in `nx.json`; `--output-style` keeps Nx out of the TUI and prefixes each line with the project). The env var is required: in a real terminal Nx otherwise runs each app in its own pseudo-terminal (raw mode, no carriage returns), which makes the interleaved output stair-step and garbled. `pnpm migrate` is a sequential `nx run-many -t migrate`. `nx serve <app>` runs one app.
+- `pnpm test` / `pnpm test:force` use the same env var and `--output-style=stream` for the same reason. `pnpm dev` is `NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream` (`serve` is `continuous` in `nx.json`; `--output-style` keeps Nx out of the TUI and prefixes each line with the project). The env var is required: in a real terminal Nx otherwise runs each app in its own pseudo-terminal (raw mode, no carriage returns), which makes the interleaved output stair-step and garbled. `pnpm dev:migrate` is an `nx run-many -t dev:migrate`. `nx serve <app>` runs one app.
 - Config is env-driven and Zod-validated at startup (`.env.example` per app). Core services need `DATABASE_URL`; service URLs default to `localhost:300x`.
 
 ## Docker and CI
 
-- Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) stays external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
-- `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, one-off migration jobs, the three services and `web`.
+- Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle (and migrations, once committed), no `node_modules`. Only `pg-native` (optional) stays external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
+- `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, the three services and `web`.
 - CI (`.github/workflows/ci.yml`, Node from `.nvmrc`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
 
 ## Affected builds

@@ -15,10 +15,11 @@
     "build": {
       "executor": "@nx/esbuild:esbuild"
     },
-    "migrate": {
+    "dev:migrate": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsx --tsconfig apps/customer-service/tsconfig.json --env-file-if-exists=apps/customer-service/.env apps/customer-service/src/migrate.ts"
+        "command": "drizzle-kit push --config apps/customer-service/src/db/drizzle.config.ts",
+        "envFile": "apps/customer-service/.env"
       }
     },
     "seed": {

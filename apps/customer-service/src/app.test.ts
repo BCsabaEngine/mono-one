@@ -1,5 +1,5 @@
+import { pushSchema } from 'drizzle-kit/api'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runMigrations } from '@lib/migrations'
 import { seedId, seedIds } from '@lib/seedIds'
 import {
   listen,
@@ -13,6 +13,7 @@ import type { AppRouter } from '@api/customer'
 import { createApp } from './app'
 import type { Config } from './config'
 import { customers } from './db/schema'
+import * as schema from './db/schema'
 import { seed } from './db/seed'
 
 const DEMO_ID = seedId('customer', 1)
@@ -31,11 +32,10 @@ describe('customer-service (real Postgres)', () => {
       testBaseConfig('customer-service', pg.url) as Config,
       silentLogger
     )
-    await runMigrations({
-      pool: app.container.cradle.database.pool,
-      migrationsFolder: `${import.meta.dirname}/db/migrations`,
-      logger: silentLogger
-    })
+    // no committed migrations during development (CLAUDE.md): create the tables from the schema, like `drizzle-kit push`
+    await (
+      await pushSchema(schema, app.container.cradle.database.db as never)
+    ).apply()
     await seed(app.container.cradle.database.db)
     client = createServiceClient<AppRouter>({
       url: `${await listen(app.server)}/trpc`,

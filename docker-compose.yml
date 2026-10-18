@@ -39,35 +39,6 @@ services:
         retries: 30
       }
 
-  # one-off migration jobs (run as a separate step, not on service start)
-  customer-migrate:
-    build: { context: ., dockerfile: apps/customer-service/Dockerfile }
-    command: ['node', 'migrate.mjs']
-    environment:
-      {
-        SERVICE_ID: customer-service,
-        DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_customer'
-      }
-    depends_on: { postgres: { condition: service_healthy } }
-  order-migrate:
-    build: { context: ., dockerfile: apps/order-service/Dockerfile }
-    command: ['node', 'migrate.mjs']
-    environment:
-      {
-        SERVICE_ID: order-service,
-        DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_order'
-      }
-    depends_on: { postgres: { condition: service_healthy } }
-  document-migrate:
-    build: { context: ., dockerfile: apps/document-service/Dockerfile }
-    command: ['node', 'migrate.mjs']
-    environment:
-      {
-        SERVICE_ID: document-service,
-        DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_document'
-      }
-    depends_on: { postgres: { condition: service_healthy } }
-
   customer-service:
     <<: *db-service
     build: { context: ., dockerfile: apps/customer-service/Dockerfile }
@@ -76,8 +47,6 @@ services:
         <<: *service-urls,
         DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_customer'
       }
-    depends_on:
-      customer-migrate: { condition: service_completed_successfully }
   order-service:
     <<: *db-service
     build: { context: ., dockerfile: apps/order-service/Dockerfile }
@@ -86,8 +55,6 @@ services:
         <<: *service-urls,
         DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_order'
       }
-    depends_on:
-      order-migrate: { condition: service_completed_successfully }
   document-service:
     <<: *db-service
     build: { context: ., dockerfile: apps/document-service/Dockerfile }
@@ -96,11 +63,9 @@ services:
         <<: *service-urls,
         DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_document'
       }
-    depends_on:
-      document-migrate: { condition: service_completed_successfully }
 
-  # no system-migrate job yet: system-service has no committed migrations during development (CLAUDE.md), so
-  # its tables come from `pnpm migrate` (drizzle-kit push); generate migrations and add the job before deploying
+  # no migrate jobs yet: no service has committed migrations during development (CLAUDE.md), so the tables
+  # come from `pnpm dev:migrate` (drizzle-kit push); generate migrations and add the jobs before deploying
   system-service:
     <<: *db-service
     build: { context: ., dockerfile: apps/system-service/Dockerfile }

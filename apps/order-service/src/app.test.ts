@@ -1,5 +1,5 @@
+import { pushSchema } from 'drizzle-kit/api'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runMigrations } from '@lib/migrations'
 import { SEED_SCALE, seedId, seedIds } from '@lib/seedIds'
 import {
   listen,
@@ -14,6 +14,7 @@ import { createApp } from './app'
 import type { Config } from './config'
 import type { Dependencies } from './container'
 import { orders } from './db/schema'
+import * as schema from './db/schema'
 import { seed } from './db/seed'
 
 const customer = {
@@ -47,11 +48,10 @@ describe('order-service (real Postgres)', () => {
       silentLogger,
       { customerClient, publisher }
     )
-    await runMigrations({
-      pool: app.container.cradle.database.pool,
-      migrationsFolder: `${import.meta.dirname}/db/migrations`,
-      logger: silentLogger
-    })
+    // no committed migrations during development (CLAUDE.md): create the tables from the schema, like `drizzle-kit push`
+    await (
+      await pushSchema(schema, app.container.cradle.database.db as never)
+    ).apply()
     client = createServiceClient<AppRouter>({
       url: `${await listen(app.server)}/trpc`,
       serviceId: 'test',

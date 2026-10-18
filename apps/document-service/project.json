@@ -15,10 +15,11 @@
     "build": {
       "executor": "@nx/esbuild:esbuild"
     },
-    "migrate": {
+    "dev:migrate": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsx --tsconfig apps/document-service/tsconfig.json --env-file-if-exists=apps/document-service/.env apps/document-service/src/migrate.ts"
+        "command": "drizzle-kit push --config apps/document-service/src/db/drizzle.config.ts",
+        "envFile": "apps/document-service/.env"
       }
     },
     "db-generate": {

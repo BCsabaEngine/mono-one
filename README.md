@@ -12,7 +12,7 @@ pnpm nx graph
 
 ```bash
 pnpm nx run-many -t build              # bundles into dist/apps/*
-docker compose up -d --build           # postgres, redis, migrations, 3 services, web on :3000
+docker compose up -d --build           # postgres, redis, 3 services, web on :3000
 ```
 
 Open http://localhost:3000, press "Login as hello@mono.hu" (seed it first with `pnpm nx seed system-service`), then call the endpoints. Only `web` is published to the host.
@@ -22,7 +22,7 @@ Open http://localhost:3000, press "Login as hello@mono.hu" (seed it first with `
 ```bash
 pnpm dev:infra   # postgres + redis in Docker (docker-compose.dev.yml)
 pnpm env:init    # creates missing .env files from .env.example (first run only)
-pnpm migrate     # applies the migrations of all services (system-service: drizzle-kit push during development)
+pnpm dev:migrate # creates/updates the tables of all services with `drizzle-kit push` (no committed migrations during development)
 pnpm seed        # optional: wipes customer + order + system data and inserts demo data; log in as hello@mono.hu / hello
 pnpm dev         # serves web + the 4 services with reload
 ```
@@ -41,4 +41,4 @@ Services restart on source changes (`tsx watch`, libs included); `web` uses Vite
 
 ## Targets
 
-`lint`, `typecheck`, `test` (Testcontainers needs Docker), `build`, `docker-build`; services also `serve`, `migrate`, `seed` (customer, order, system), `db-generate` (after a schema change; system-service has no committed migrations yet, its `migrate` target runs `drizzle-kit push`).
+`lint`, `typecheck`, `test` (Testcontainers needs Docker), `build`, `docker-build`; services also `serve`, `dev:migrate`, `seed` (customer, order, system), `db-generate` (only when migrations are re-introduced; no service has committed migrations now, the `dev:migrate` target runs `drizzle-kit push`).
