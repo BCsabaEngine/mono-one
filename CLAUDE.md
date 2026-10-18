@@ -17,7 +17,7 @@ order-service ──events.deliver (tRPC, instant, parallel)──> document-ser
 core services ──> Postgres (one database each)        web ──> Redis (JWT storage only)
 ```
 
-- The browser only talks to `web`. The core services have no browser access and must stay on the private network (see Auth).
+- The browser only talks to `web`. The core services have no browseraccess and must stay on the private network (see Auth).
 - `web` hosts the browser-facing tRPC router (`/trpc`) and receives events on `/events`. It forwards events to browsers with an SSE tRPC subscription (`live.orderPlaced`).
 - Core services expose plain request/response tRPC under `/trpc`, events under `/events`, plus `/healthz` and `/readyz`. No WebSockets or subscriptions on core services.
 - tRPC is mandatory for every typed request/response between client and server and between services.
