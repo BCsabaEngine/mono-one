@@ -24,8 +24,7 @@ export const seedService = async <TSchema extends Record<string, unknown>>({
     throw new Error('Refusing to seed: NODE_ENV is production')
   const logger = createLogger({
     service: serviceId,
-    level: config.LOG_LEVEL,
-    pretty: config.NODE_ENV === 'development'
+    level: config.LOG_LEVEL
   })
   const { db, close } = createDb(config, logger, schema)
   try {

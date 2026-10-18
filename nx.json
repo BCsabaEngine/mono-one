@@ -60,7 +60,7 @@
         "thirdParty": true,
         "sourcemap": true,
         "skipTypeCheck": true,
-        "external": ["pg-native", "pino-pretty"],
+        "external": ["pg-native"],
         "assets": [
           {
             "input": "{projectRoot}/src/db/migrations",

@@ -42,7 +42,7 @@ export const runMigrations = async ({
 /** Standard `migrate` entry point: each service calls this from its own src/migrate.ts. */
 export const migrateService = async ({ serviceId, migrationsFolder }: { serviceId: string; migrationsFolder: string }) => {
   const config = loadConfig(baseEnvSchema, { SERVICE_ID: serviceId, ...process.env })
-  const logger = createLogger({ service: serviceId, level: config.LOG_LEVEL, pretty: config.NODE_ENV === 'development' })
+  const logger = createLogger({ service: serviceId, level: config.LOG_LEVEL })
   const { pool, close } = createDb(config, logger)
   try {
     await runMigrations({ pool, migrationsFolder, logger, schema: config.DB_SCHEMA ?? 'public' })

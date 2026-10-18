@@ -18,8 +18,7 @@ const build = () => {
 		config,
 		log: createLogger({
 			service: config.SERVICE_ID,
-			level: config.LOG_LEVEL,
-			pretty: config.NODE_ENV === 'development'
+			level: config.LOG_LEVEL
 		}),
 		// Redis holds JWTs only (key prefix jwt:)
 		redis: new Redis(config.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 }),

@@ -7,8 +7,7 @@ import { loadServiceConfig } from './config'
 const config = loadServiceConfig()
 const log = createLogger({
   service: config.SERVICE_ID,
-  level: config.LOG_LEVEL,
-  pretty: config.NODE_ENV === 'development'
+  level: config.LOG_LEVEL
 })
 log.info({ port: config.PORT }, 'starting')
 log.debug({ config: redactConfig(config) }, 'config')

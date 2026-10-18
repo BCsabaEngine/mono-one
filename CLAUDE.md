@@ -95,7 +95,7 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - Business logic in `services/` implements the ports from `<svc>-api` (`contract.ts`, imported type-only); routers (in `<svc>-api`) validate input with the contract schemas and delegate through `ctx.services`.
 - **Awilix**: root container at startup, a scoped container per request in `createContext` (carries the request-ID logger). Services get dependencies from the cradle and never import the container. The pg pool is disposed by `container.dispose()` on shutdown.
 - **Errors**: throw `DomainError` (`@lib/errors`); mapped to `TRPCError` in one place (`createTRPC` in `libs/trpc`). Unknown errors are logged and masked. Downstream tRPC errors are re-raised with their code by `fromClientError`.
-- **Logging**: one pino child logger per request with a request ID, forwarded in `x-request-id` on service calls. pino-pretty only in development.
+- **Logging**: one pino child logger per request with a request ID, forwarded in `x-request-id` on service calls.
 - **Health**: `/healthz` (liveness), `/readyz` (Postgres ping). Graceful shutdown on SIGTERM/SIGINT: stop accepting, drain, close the pool.
 - **Service clients** (`createServiceClient`) use `httpLink` with a per-call context `{ jwt, requestId }` and a timeout, not `httpBatchLink` (a batch would share one `authorization` header).
 
@@ -191,7 +191,7 @@ pnpm nx run-many -t build && docker compose up -d --build   # full stack in Dock
 
 ## Docker and CI
 
-- Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) and `pino-pretty` (dev only) stay external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
+- Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle and migrations, no `node_modules`. Only `pg-native` (optional) stays external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
 - `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, one-off migration jobs, the three services and `web`.
 - CI (`.github/workflows/ci.yml`, Node from `.nvmrc`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test`, `build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
 
