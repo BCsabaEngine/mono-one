@@ -1,9 +1,11 @@
 import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
 	plugins: [
+		tailwindcss(), // build engine for flowbite-svelte only
 		sveltekit({
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
@@ -18,6 +20,8 @@ export default defineConfig({
 		// `@api/<svc>` also exports the owning service's router; web only needs the contract, so drop the router modules from the bundle
 		rolldownOptions: { treeshake: { moduleSideEffects: id => !/libs\/[^/]+-api\/src\/server\.ts$/.test(id) } }
 	},
+	// svstate's dist uses extensionless relative imports, which Node's native ESM loader rejects in dev SSR; let Vite resolve them
+	ssr: { noExternal: ['svstate'] },
 	clearScreen: false, // keep the output of the other apps visible
 	server: { port: 3000 }
 })

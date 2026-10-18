@@ -1,0 +1,33 @@
+/* Tailwind is only the build engine flowbite-svelte's components need; app markup is styled with component props and scoped CSS. */
+@import 'tailwindcss';
+@import '../../../node_modules/flowbite-svelte/dist/theme-selector/themes/default.css';
+@plugin 'flowbite/plugin';
+@custom-variant dark (&:where(.dark, .dark *));
+@source '../../../node_modules/flowbite-svelte/dist';
+@source '../../../node_modules/flowbite-svelte-icons/dist';
+
+/* brand colour: matches the blue of the logo */
+@theme {
+	--color-primary-50: var(--color-blue-50);
+	--color-primary-100: var(--color-blue-100);
+	--color-primary-200: var(--color-blue-200);
+	--color-primary-300: var(--color-blue-300);
+	--color-primary-400: var(--color-blue-400);
+	--color-primary-500: var(--color-blue-500);
+	--color-primary-600: var(--color-blue-600);
+	--color-primary-700: var(--color-blue-700);
+	--color-primary-800: var(--color-blue-800);
+	--color-primary-900: var(--color-blue-900);
+	--color-primary-950: var(--color-blue-950);
+}
+
+:root {
+	color-scheme: light;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	background: var(--color-neutral-secondary-soft);
+	color: var(--color-body);
+}

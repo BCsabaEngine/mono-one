@@ -1,8 +1,25 @@
 import { on } from 'node:events'
+import { z } from 'zod'
 import { createTRPC, fromClientError, requireIdentity, unsignedJwt } from '@lib/trpc'
-import { getCustomerInput } from '@api/customer'
+import {
+	addAddressInput,
+	addContactInput,
+	addCustomerInput,
+	deleteInput as deleteCustomerChildInput,
+	getCustomerInput,
+	listCustomersInput,
+	updateAddressInput,
+	updateContactInput,
+	updateCustomerInput
+} from '@api/customer'
 import { generateOrderDocumentInput } from '@api/document'
-import { createOrderInput } from '@api/order'
+import {
+	addOrderDetailInput,
+	createOrderInput,
+	deleteInput as deleteOrderInput,
+	getOrderInput,
+	listOrdersInput
+} from '@api/order'
 import { addUserInput, authUserInput, deleteUserInput, getUserInput, getUsersInput, updateUserInput } from '@api/system'
 import { bus } from '../bus'
 import { deleteJwt, saveJwt, SESSION_COOKIE } from '../session'
@@ -12,6 +29,9 @@ import type { WebContext } from './context'
 const { router, procedure } = createTRPC<WebContext>()
 
 const authed = procedure.use(({ ctx, next }) => (requireIdentity(ctx), next()))
+
+// customer-service has no "list all" call: customers.list takes up to 100 ids and omits unknown ones. Identity ids are contiguous, so a full window means there may be more
+const CUSTOMER_PAGE_SIZE = 100
 
 /** Browser-facing router hosted inside SvelteKit; the browser never talks to the core services. */
 export const webRouter = router({
@@ -35,6 +55,12 @@ export const webRouter = router({
 			})
 
 			return { id: user.id, name: user.name, permissions: user.permissions }
+		}),
+
+		logout: procedure.mutation(async ({ ctx }) => {
+			if (ctx.sessionId) await deleteJwt(ctx.sessionId)
+
+			ctx.cookies.delete(SESSION_COOKIE, { path: '/' })
 		})
 	}),
 
@@ -43,6 +69,79 @@ export const webRouter = router({
 			.input(getCustomerInput)
 			.query(({ input, ctx }) =>
 				ctx.services.customer.customers.get.query(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		// soft-deleted customers included (deletedAt set), for resolving names of existing orders
+		byIds: authed
+			.input(listCustomersInput)
+			.query(({ input, ctx }) =>
+				ctx.services.customer.customers.list.query(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		// one window of CUSTOMER_PAGE_SIZE ids; active customers only
+		page: authed.input(z.object({ page: z.number().int().min(0).max(1000) })).query(async ({ input, ctx }) => {
+			const ids = Array.from({ length: CUSTOMER_PAGE_SIZE }, (_, i) => input.page * CUSTOMER_PAGE_SIZE + i + 1)
+			const rows = await ctx.services.customer.customers.list.query({ ids }, callContext(ctx)).catch(fromClientError)
+
+			return { customers: rows.filter(c => !c.deletedAt), hasMore: rows.length === CUSTOMER_PAGE_SIZE }
+		}),
+
+		add: authed
+			.input(addCustomerInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.customers.add.mutate(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		update: authed
+			.input(updateCustomerInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.customers.update.mutate(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		delete: authed
+			.input(deleteCustomerChildInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.customers.delete.mutate(input, callContext(ctx)).catch(fromClientError)
+			)
+	}),
+
+	addresses: router({
+		add: authed
+			.input(addAddressInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.addresses.add.mutate(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		update: authed
+			.input(updateAddressInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.addresses.update.mutate(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		delete: authed
+			.input(deleteCustomerChildInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.addresses.delete.mutate(input, callContext(ctx)).catch(fromClientError)
+			)
+	}),
+
+	contacts: router({
+		add: authed
+			.input(addContactInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.contacts.add.mutate(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		update: authed
+			.input(updateContactInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.contacts.update.mutate(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		delete: authed
+			.input(deleteCustomerChildInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.customer.contacts.delete.mutate(input, callContext(ctx)).catch(fromClientError)
 			)
 	}),
 
@@ -51,6 +150,34 @@ export const webRouter = router({
 			.input(createOrderInput)
 			.mutation(({ input, ctx }) =>
 				ctx.services.order.orders.create.mutate(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		list: authed
+			.input(listOrdersInput)
+			.query(({ input, ctx }) => ctx.services.order.orders.list.query(input, callContext(ctx)).catch(fromClientError)),
+
+		get: authed
+			.input(getOrderInput)
+			.query(({ input, ctx }) => ctx.services.order.orders.get.query(input, callContext(ctx)).catch(fromClientError)),
+
+		delete: authed
+			.input(deleteOrderInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.order.orders.delete.mutate(input, callContext(ctx)).catch(fromClientError)
+			)
+	}),
+
+	orderDetails: router({
+		add: authed
+			.input(addOrderDetailInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.order.orderDetails.add.mutate(input, callContext(ctx)).catch(fromClientError)
+			),
+
+		delete: authed
+			.input(deleteOrderInput)
+			.mutation(({ input, ctx }) =>
+				ctx.services.order.orderDetails.delete.mutate(input, callContext(ctx)).catch(fromClientError)
 			)
 	}),
 

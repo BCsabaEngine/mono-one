@@ -5,6 +5,7 @@
 		"paths": {
 			"@lib/*": ["../../libs/*"],
 			"@api/*": ["../../libs/*-api/src/index.ts"],
+			"@domain/*": ["../../libs/*-api/src/domain.ts"],
 			"@events/*": ["../../libs/events/*.ts"]
 		}
 	},

@@ -25,44 +25,48 @@ customer/order/system-service ──> Postgres (one database each; document-serv
 
 ### Apps and example endpoints
 
-| App                | Port | Procedure                                                                                     | Notes                                                                                             |
-| ------------------ | ---- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `web`              | 3000 | `customers.get`, `orders.create`, `documents.generateOrderDocument`, `live.orderPlaced` (SSE) | proxies to the services; runs as exactly one instance                                             |
-| `customer-service` | 3001 | `customers.get/list/add/update/delete`, `addresses.*`, `contacts.*`                           | customers with addresses and contacts (see Customer service); `web` only forwards `customers.get` |
-| `order-service`    | 3002 | `orders.create/list/delete`, `orderDetails.add/delete`                                        | orders with details (see Order service); `web` only forwards `orders.create`                      |
-| `document-service` | 3003 | `documents.generateOrderDocument`                                                             | renders an order document on demand, no database (see Document service)                           |
-| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete`       | users + flat permissions (see System service); later runtime configs, tasks, calendar             |
+| App                | Port | Procedure                                                                                                                                       | Notes                                                                                                          |
+| ------------------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `web`              | 3000 | `auth.*`, `customers.*`, `addresses.*`, `contacts.*`, `orders.*`, `orderDetails.*`, `documents.generateOrderDocument`, `live.orderPlaced` (SSE) | admin UI + BFF: forwards to the services (see Web UI); runs as exactly one instance                            |
+| `customer-service` | 3001 | `customers.get/list/add/update/delete`, `addresses.*`, `contacts.*`                                                                             | customers with addresses and contacts (see Customer service); `web` forwards all of it plus `byIds` and `page` |
+| `order-service`    | 3002 | `orders.create/list/delete`, `orderDetails.add/delete`                                                                                          | orders with details (see Order service); `web` forwards `create/get/list/delete` and `orderDetails.*`          |
+| `document-service` | 3003 | `documents.generateOrderDocument`                                                                                                               | renders an order document on demand, no database (see Document service)                                        |
+| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete`                                                         | users + flat permissions (see System service); later runtime configs, tasks, calendar                          |
 
-Directions: `web` -> all four, `order-service` -> `customer-service`, `document-service` -> `order-service` and `customer-service`. Demo data: `pnpm nx dev:seed <svc>` (customer-service, order-service, system-service; see Data rules). The web `auth.login` tRPC mutation is the real login (`users.auth`, then an unsigned JWT with `sub`, `permissions`, `email`, `name` stored in Redis; it sets the `sid` cookie through `ctx.cookies`); seeded starter user `hello@mono.hu` / `hello` (`pnpm nx dev:seed system-service`).
+Directions: `web` -> all four, `order-service` -> `customer-service`, `document-service` -> `order-service` and `customer-service`. Demo data: `pnpm nx dev:seed <svc>` (customer-service, order-service, system-service; see Data rules). The web `auth.login` tRPC mutation is the real login (`users.auth`, then an unsigned JWT with `sub`, `permissions`, `email`, `name` stored in Redis; it sets the `sid` cookie through `ctx.cookies`; `auth.logout` deletes the Redis entry and the cookie); seeded starter user `hello@mono.hu` / `hello` (`pnpm nx dev:seed system-service`).
 
 ## Stack
 
-| Area                          | Choice                                                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------- |
-| Monorepo                      | Nx 23 + pnpm, one root `package.json` and lockfile                                                |
-| Frontend + BFF                | SvelteKit 3 (Svelte 5), adapter-node                                                              |
-| Core services                 | plain Node + tRPC (`createHTTPHandler` on `node:http`), Awilix DI                                 |
-| DB                            | PostgreSQL 18 + Drizzle ORM; schema applied with `drizzle-kit push` (no committed migrations yet) |
-| Redis                         | `web` only, JWT storage (`jwt:<sid>`, TTL = token lifetime). Not used for events or queues        |
-| Validation / config / logging | Zod 4, Zod-validated env (fail fast), pino                                                        |
-| Tests                         | Vitest + Testcontainers (real Postgres)                                                           |
-| Lint / format                 | ESLint 10 flat config (one root file), Prettier; `apps/web` has its own Prettier config           |
+| Area                          | Choice                                                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Monorepo                      | Nx 23 + pnpm, one root `package.json` and lockfile                                                        |
+| Frontend + BFF                | SvelteKit 3 (Svelte 5), adapter-node                                                                      |
+| Web UI                        | flowbite-svelte 2 (components, props only), svstate (forms), Tailwind CSS only as flowbite's build engine |
+| Core services                 | plain Node + tRPC (`createHTTPHandler` on `node:http`), Awilix DI                                         |
+| DB                            | PostgreSQL 18 + Drizzle ORM; schema applied with `drizzle-kit push` (no committed migrations yet)         |
+| Redis                         | `web` only, JWT storage (`jwt:<sid>`, TTL = token lifetime). Not used for events or queues                |
+| Validation / config / logging | Zod 4, Zod-validated env (fail fast), pino                                                                |
+| Tests                         | Vitest + Testcontainers (real Postgres)                                                                   |
+| Lint / format                 | ESLint 10 flat config (one root file), Prettier; `apps/web` has its own Prettier config                   |
 
 ### Versions
 
 Pinned exactly (`save-exact`, committed `pnpm-lock.yaml`, `.nvmrc`, Docker tags); upgrade only deliberately, in a dedicated change, and re-run `lint typecheck test build`. Never use `latest` or ranges.
 
-| Item                                | Version                            | Note                                                  |
-| ----------------------------------- | ---------------------------------- | ----------------------------------------------------- |
-| Node                                | 24.21.0                            | `.nvmrc`, `engines`, `node:24.21.0-slim`              |
-| pnpm                                | 12.14.0                            | via Corepack (`packageManager`)                       |
-| Nx and `@nx/*`                      | 23.3.0                             | all on one version (incl. `@nx/eslint`, `@nx/vitest`) |
-| TypeScript                          | 6.0.3                              | not 7: SvelteKit 3 requires 6 and Nx needs the TS API |
-| `@types/node`                       | 24.19.2                            | matches the Node 24 runtime                           |
-| SvelteKit / Svelte / Vite           | 3.1.0 / 5.57.2 / 8.3.4             |                                                       |
-| tRPC                                | 11.19.0                            |                                                       |
-| Zod / Vitest / ESLint / Drizzle ORM | 4.6.7 / 5.0.5 / 10.13.0 / 0.45.4   |                                                       |
-| Postgres / Redis images             | 18.6-alpine3.24 / 8.8.3-alpine3.23 | `docker-compose.yml`, `libs/testing.ts`               |
+| Item                                 | Version                            | Note                                                  |
+| ------------------------------------ | ---------------------------------- | ----------------------------------------------------- |
+| Node                                 | 24.21.0                            | `.nvmrc`, `engines`, `node:24.21.0-slim`              |
+| pnpm                                 | 12.14.0                            | via Corepack (`packageManager`)                       |
+| Nx and `@nx/*`                       | 23.3.0                             | all on one version (incl. `@nx/eslint`, `@nx/vitest`) |
+| TypeScript                           | 6.0.3                              | not 7: SvelteKit 3 requires 6 and Nx needs the TS API |
+| `@types/node`                        | 24.19.2                            | matches the Node 24 runtime                           |
+| SvelteKit / Svelte / Vite            | 3.1.0 / 5.57.2 / 8.3.4             |                                                       |
+| flowbite-svelte / flowbite           | 2.0.0-next.14 / 4.0.2              | v2 is a prerelease (`next` tag): bump deliberately    |
+| Tailwind CSS (+ `@tailwindcss/vite`) | 4.3.3                              | engine for flowbite-svelte only, see Web UI           |
+| flowbite-svelte-icons / svstate      | 3.1.0 / 2.1.0                      |                                                       |
+| tRPC                                 | 11.19.0                            |                                                       |
+| Zod / Vitest / ESLint / Drizzle ORM  | 4.6.7 / 5.0.5 / 10.13.0 / 0.45.4   |                                                       |
+| Postgres / Redis images              | 18.6-alpine3.24 / 8.8.3-alpine3.23 | `docker-compose.yml`, `libs/testing.ts`               |
 
 ## Workspace layout
 
@@ -74,7 +78,7 @@ libs/
   events/   one Nx project, imported as @events/<file>: contract.ts (defineEvent, envelope, ServiceId, EventsRouter) registry.ts (EVENTS map) client.ts (publisher, events router) + one file per owning service (order.ts)
 ```
 
-- Libs are source-consumed (not buildable); path mappings live in `tsconfig.base.json`; `apps/web/tsconfig.json` repeats them (relative to itself) because it extends `$app/tsconfig`, not the base, so a new alias goes into both files. No `baseUrl` (deprecated in TS 6); entries start with `./`.
+- Libs are source-consumed (not buildable); path mappings live in `tsconfig.base.json`; `apps/web/tsconfig.json` repeats them (relative to itself) because it extends `$app/tsconfig`, not the base, so a new alias goes into both files. No `baseUrl` (deprecated in TS 6); entries start with `./`. `@domain/*` maps to `libs/*-api/src/domain.ts`, the dependency-free code-only lists (only `customer-api` has one): the browser takes `ADDRESS_TYPES` etc. from there, because `@api/<svc>` also re-exports the service router (and `node:crypto`), which breaks the dev client.
 - `*-api` libs hold the contract (`contract.ts`) and the router (`server.ts`) and have one entry point, `@api/<svc>` (`@api/*` maps to `libs/*-api/src/index.ts`; contract re-exports, `AppRouter` type, plus `appRouter` and the context type, which ESLint restricts to the owning service app). The router never imports from an app, so the Nx graph stays acyclic.
 - Shared helpers (`@lib/*` maps to `./libs/*`; they sit directly in `libs/`, are not an Nx project (no tags, no targets) and import each other with relative paths): `config` (Zod env, base schema, secret redaction), `logging` (pino, trace child logger), `errors` (`DomainError`), `db` (Drizzle + pg pool, query logging, slow-query warning, ping, close), `migrations` (advisory-locked runner, `defineDrizzleConfig`), `trpc` (context, JWT decode, error mapping, client factory, server + shutdown helpers), `businessColumns` (`businessTimestampColumnsSoftDelete`: `createdAt` / `updatedAt` / `deletedAt` for every business table, `businessTimestampColumns` without `deletedAt` for hard-deleted tables; schemas import it by relative path because drizzle-kit ignores tsconfig paths), `seedIds` (shared seed-id scale 1..100 per entity), `seeding` (seeder bootstrap), `testing` (Testcontainers helpers, tests only). `libs/tsconfig.json` (extends the base, includes `*.ts`, `trpc`, `migrations`) exists only so the editor resolves `@types/node` for them; no Nx target uses it.
 
@@ -135,20 +139,20 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - `customer-service` owns `customer`, `address` and `contact` (database `mono_customer`); one service/router namespace per table (`customers`, `addresses`, `contacts`). All three have `created_at`, `updated_at`, `deleted_at` (soft delete); children cascade only on a hard delete; soft-deleting a customer leaves its addresses and contacts untouched.
 - `customer`: `code` (unique among active customers, a soft-deleted one frees it), `name`, `comment`. `address`: `type` (`hq|site|mail`), optional `name`, `country` (EU member state ISO code), `zip`, `city`, `address`. `contact`: `type` (`stock|management|sales`), mandatory `name`, optional `phone`, `email`. Type and country lists are code-only (`libs/customer-api/src/domain.ts`, loaded by the Drizzle schema by relative path like `system-api/permissions.ts`).
 - `customers.get` / `customers.list` (1..100 ids, order kept, unknown ids omitted) need an identity and return soft-deleted customers too (`deletedAt` set; callers such as order-service treat them as missing) with their active addresses and contacts (also for a deleted customer). Adding an address or contact to a deleted customer is NOT_FOUND. All `add` / `update` / `delete` calls need the `customer.admin` permission. On `update`, omitted fields stay and `null` clears an optional column. Deletes are idempotent.
-- Not exposed through `web` yet (no admin UI); the seed creates 100 customers (`C-0001`..) with an hq address and a sales contact.
+- Managed through the `web` admin UI (customers, addresses, contacts); the seed creates 100 customers (`C-0001`..) with an hq address and a sales contact.
 
 ## Order service
 
 - `order-service` owns `order` and `order_detail` (database `mono_order`); router namespaces `orders` (`create`, `get`, `list`, `delete`) and `orderDetails` (`add`, `delete`), all needing an identity.
 - `order`: `customer_id`, `title`, `comment`, `delivery_address_id` (an address of that customer in customer-service; no cross-service foreign key, so `orders.create` checks it against `customers.get` and answers BAD_REQUEST otherwise), soft delete (`deleted_at`). `order_detail`: `order_id` (FK, cascade), `product_code` and `product_name` (copied text, not a product reference), `quantity`, `unit_price`, `net_value` (= quantity * unit price, always set by the service); hard delete, so `businessTimestampColumns`. Money is in minor units (`bigint` in `mode: 'number'`); the contract caps quantity, unit price and the detail count so every sum stays a safe integer.
 - `orders.create` stores the order and all its details in one transaction (at least one detail), then publishes `order.placed` with `orderId`, `customerId` and `totalCents` (sum of the net values). `orders.get` returns one active order with its details (NOT_FOUND when missing or soft-deleted). `orders.list` returns active orders newest first with their details in exactly two selects (orders page, then `order_id in (...)`), optional `customerId` filter, `limit` (default 50, max 100) / `offset`. `orders.delete` is a soft delete, idempotent (children stay). `orderDetails.add` / `delete` are NOT_FOUND when the order is missing or soft-deleted and touch the order's `updated_at`; deleting the last detail is allowed.
-- Not exposed through `web` beyond `orders.create`. The seed creates 100 orders (order n for customer n, delivered to address n, which is customer-service's seeded hq address) with two details each. An existing `mono_order` database still has the old `orders` table: drop and recreate it (or the whole database) before `pnpm dev:migrate`.
+- Managed through the `web` admin UI (list, create, delete, add/delete lines; there is no order update call, so title/comment/customer/address cannot be edited). The seed creates 100 orders (order n for customer n, delivered to address n, which is customer-service's seeded hq address) with two details each. An existing `mono_order` database still has the old `orders` table: drop and recreate it (or the whole database) before `pnpm dev:migrate`.
 
 ## Document service
 
 - `document-service` has no database, no schema, no migrations and no seed (config extends `commonEnvSchema`, `/readyz` is ready once it listens, its `build` target has no `migrate.ts` entry point or migration assets, its compose entry has no `depends_on` Postgres). It owns and subscribes to no events (empty `createEventsRouter`).
 - `documents.generateOrderDocument` (query, needs the `document.read` permission): input `{ orderId }`, output `{ orderId, filename, contentType: 'text/markdown', content }`. It calls `orders.get` on order-service and `customers.get` on customer-service with the caller's JWT, trace id and call chain (`callContextOf`), then renders with the pure `renderOrderMarkdown` (`services/orderMarkdown.ts`). A downstream NOT_FOUND (order missing or soft-deleted, customer unknown) answers NOT_FOUND; other downstream errors keep their code (`fromClientError`). A soft-deleted customer and a delivery address that is no longer active still render (the address as "no longer available").
-- Nothing is stored: every call renders again. PDF comes later as an additional `contentType` (with `content` as base64) on the same procedure; keep API changes additive. The admin UI will call it through `web` (the `documents.generateOrderDocument` forward exists already).
+- Nothing is stored: every call renders again. PDF comes later as an additional `contentType` (with `content` as base64) on the same procedure; keep API changes additive. The admin UI calls it through `web` (order list and detail panel: view, download, copy).
 
 ## Events (no bus, no persistence, no retry)
 
@@ -165,6 +169,18 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 - **Core services decode the JWT without verifying it** (no signature, `aud`, `exp` or revocation check) and use the claims for authorization only (`ctx.identity`, `requireIdentity`). `x-service-id` is informational.
 - This is safe only while the core services are reachable solely from `web` and other services (private network, no public port). `docker-compose.yml` publishes only `web`. If that changes, add verification in the shared tRPC identity middleware (`libs/trpc`); nothing else depends on it.
 - Not a public API: an external consumer would need a REST/OpenAPI layer on top.
+
+## Web UI
+
+- Pages (`apps/web/src/routes`): `login`, and the `(app)` group (guarded by `(app)/+layout.server.ts`, which redirects to `/login` without a session): `customers`, `orders`; `/` redirects to `/customers`. `routes/+layout.server.ts` decodes the session JWT (claims, not verified) into `data.user` (`name`, `email`, `permissions`); buttons are hidden by permission (`customer.admin`, `order.place`, `document.read`, `lib/permissions.ts`), the services still enforce them.
+- Every list opens its selected row in a right-hand drawer (`SidePanel`); create/edit are modals; deletes go through `ConfirmDialog`. Customers: add/edit/delete plus addresses and contacts in the drawer. Orders: list (newest first, "load more"), create (customer, one of its addresses, lines), add/delete lines, delete, generate the markdown document (view, download, copy). `live.orderPlaced` reloads the order list.
+- The UI only uses the existing service calls; the `web` router just forwards them (`customers.page`, `customers.byIds`, `auth.logout` are web-only helpers). customer-service has no list-all call, so `customers.page` asks `customers.list` for a window of 100 consecutive ids (identity ids are contiguous) and `lib/customers.ts` walks the windows.
+- Components: `lib/components/ui` holds the generic, reusable ones (`DataTable`, `SidePanel`, `FormModal` + `FormBody`, `ConfirmDialog`, `TextField`, `SelectField`, `InfoList`, `Section`, `ItemCard`, `IconButton`, `PageHeader`, `ErrorAlert`, `ToastHost`); `customers/` and `orders/` hold the feature components (`*Form` = one svstate form each, `*Detail` = drawer content). A thing used twice becomes a component.
+- **Forms use svstate**: `createSvState(initial, { validator, action })`; errors are shown only after the first submit (`submitted` flag), `validate()` before `execute()`, the action's thrown error lands in `$actionError`. A form component is mounted only while its `FormModal` is open (flowbite's dialogs render nothing when closed), so each opening starts from fresh state. svstate's dist uses extensionless imports, hence `ssr.noExternal: ['svstate']` in `vite.config.ts`.
+- **Styling: no Tailwind classes in our markup.** flowbite-svelte's components are built from Tailwind utilities, so `tailwindcss` + `@tailwindcss/vite` stay as their build engine (`src/app.css` with the flowbite theme, `@source` of the flowbite packages and the `--color-primary-*` palette, otherwise the brand colour is transparent). Our own layout is plain scoped CSS using flowbite's CSS variables (`var(--color-heading)`); never name a scoped class like a Tailwind utility (a `.table` class turned the wrapper into `display: table`). Light theme only (`color-scheme: light`).
+- .svelte files do not get the tsconfig path aliases (the `include` covers no .svelte): value imports from `@api/*`, `@lib/*` there must go through a `.ts` file in `lib/`; type imports are fine.
+- Dialogs, drawers and toasts live in the browser top layer, so `ToastHost` is a `popover="manual"` element re-shown on every toast.
+- Favicons: `apps/web/static` (`favicon.ico`, `favicon-32.png`, `icon-192.png`, `apple-touch-icon.png`), all resized from the one source logo.
 
 ## SvelteKit 3 specifics
 
@@ -223,4 +239,4 @@ Callers depend on `*-api`, not on service apps, so internal service changes do n
 
 ## Not done yet
 
-Registry push in CI, husky/lint-staged, OpenTelemetry tracing, real service domains (customer, order and document services are examples; the order document is a minimal markdown rendering).
+Registry push in CI, husky/lint-staged, OpenTelemetry tracing, web UI tests (only the services have tests), a UI for users/permissions (system-service has the calls, `web` forwards `users.*`), order editing (no update call in order-service), real service domains (customer, order and document services are examples; the order document is a minimal markdown rendering).
