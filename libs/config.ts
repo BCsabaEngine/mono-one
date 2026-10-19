@@ -1,34 +1,53 @@
 import { z } from 'zod'
+import { REDACTED, SERVICE_PORTS } from './constants'
+import type { ServiceId } from './constants'
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 5000
+const DEFAULT_EVENT_TIMEOUT_MS = 2500
+const DEFAULT_DB_POOL_SIZE = 10
+const DEFAULT_DB_SLOW_QUERY_MS = 500
+
+const positiveInt = (fallback: number) =>
+  z.coerce.number().int().positive().default(fallback)
+
+const localUrl = (id: ServiceId) =>
+  z.url().default(`http://localhost:${SERVICE_PORTS[id]}`)
+
+/** The per-service part of a config schema: `baseEnvSchema.extend(serviceEnv('order-service'))`. */
+export const serviceEnv = (id: ServiceId) => ({
+  SERVICE_ID: z.string().default(id),
+  PORT: positiveInt(SERVICE_PORTS[id])
+})
 
 export const commonEnvSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
   SERVICE_ID: z.string().min(1),
-  PORT: z.coerce.number().int().positive().default(3000),
+  PORT: positiveInt(SERVICE_PORTS.web),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
-  REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  EVENT_TIMEOUT_MS: z.coerce.number().int().positive().default(2500),
-  WEB_URL: z.url().default('http://localhost:3000'),
-  CUSTOMER_SERVICE_URL: z.url().default('http://localhost:3001'),
-  ORDER_SERVICE_URL: z.url().default('http://localhost:3002'),
-  DOCUMENT_SERVICE_URL: z.url().default('http://localhost:3003'),
-  SYSTEM_SERVICE_URL: z.url().default('http://localhost:3004')
+  REQUEST_TIMEOUT_MS: positiveInt(DEFAULT_REQUEST_TIMEOUT_MS),
+  EVENT_TIMEOUT_MS: positiveInt(DEFAULT_EVENT_TIMEOUT_MS),
+  WEB_URL: localUrl('web'),
+  CUSTOMER_SERVICE_URL: localUrl('customer-service'),
+  ORDER_SERVICE_URL: localUrl('order-service'),
+  DOCUMENT_SERVICE_URL: localUrl('document-service'),
+  SYSTEM_SERVICE_URL: localUrl('system-service')
 })
 
 export const baseEnvSchema = commonEnvSchema.extend({
   DATABASE_URL: z.string().min(1),
   DB_SCHEMA: z.string().optional(),
-  DB_POOL_SIZE: z.coerce.number().int().positive().default(10),
-  DB_SLOW_QUERY_MS: z.coerce.number().int().positive().default(500)
+  DB_POOL_SIZE: positiveInt(DEFAULT_DB_POOL_SIZE),
+  DB_SLOW_QUERY_MS: positiveInt(DEFAULT_DB_SLOW_QUERY_MS)
 })
 
 export type CommonEnv = z.infer<typeof commonEnvSchema>
 export type BaseEnv = z.infer<typeof baseEnvSchema>
 
-const SECRET_KEY = /(PASSWORD|SECRET|TOKEN|KEY|DATABASE_URL|REDIS_URL)/i
+const SECRET_KEY_PATTERN = /(PASSWORD|SECRET|TOKEN|KEY|DATABASE_URL|REDIS_URL)/i
 
 export const redactConfig = <T extends Record<string, unknown>>(
   config: T
@@ -36,7 +55,7 @@ export const redactConfig = <T extends Record<string, unknown>>(
   Object.fromEntries(
     Object.entries(config).map(([k, v]) => [
       k,
-      SECRET_KEY.test(k) ? '[redacted]' : v
+      SECRET_KEY_PATTERN.test(k) ? REDACTED : v
     ])
   )
 

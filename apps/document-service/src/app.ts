@@ -1,7 +1,6 @@
-import { asValue } from 'awilix'
 import type { Logger } from '@lib/logging'
-import { baseContextFromHeaders, createServiceServer } from '@lib/trpc'
-import { createEventsRouter } from '@events/client'
+import { applyOverrides, createServiceServer } from '@lib/trpc'
+import { emptyEventsRouter } from '@events/client'
 import { appRouter } from '@api/document'
 import type { Config } from './config'
 import { buildContainer } from './container'
@@ -16,19 +15,13 @@ export const createApp = (
 ) => {
   const container = buildContainer(config, log)
 
-  Object.entries(overrides).forEach(([name, value]) =>
-    container.register({ [name]: asValue(value) })
-  )
+  applyOverrides(container, overrides)
 
   const server = createServiceServer({
     log,
+    serviceId: config.SERVICE_ID,
     trpc: { router: appRouter, createContext: createContext(container) },
-    // document-service owns no events and subscribes to none: the handler map is empty (checked by the compiler)
-    events: {
-      router: createEventsRouter('document-service', {}),
-      createContext: headers =>
-        baseContextFromHeaders(headers, log, config.SERVICE_ID)
-    },
+    events: emptyEventsRouter('document-service'),
     ready: async () => undefined // no database: ready as soon as it listens
   })
 

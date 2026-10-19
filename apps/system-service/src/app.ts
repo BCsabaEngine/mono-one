@@ -1,5 +1,5 @@
 import type { Logger } from '@lib/logging'
-import { baseContextFromHeaders, createServiceServer } from '@lib/trpc'
+import { createServiceServer } from '@lib/trpc'
 import { appRouter } from '@api/system'
 import type { Config } from './config'
 import { buildContainer } from './container'
@@ -12,12 +12,9 @@ export const createApp = (config: Config, log: Logger) => {
 
   const server = createServiceServer({
     log,
+    serviceId: config.SERVICE_ID,
     trpc: { router: appRouter, createContext: createContext(container) },
-    events: {
-      router: eventsRouter,
-      createContext: headers =>
-        baseContextFromHeaders(headers, log, config.SERVICE_ID)
-    },
+    events: eventsRouter,
     ready: container.cradle.database.ping
   })
 

@@ -1,15 +1,26 @@
 import { randomUUID } from 'node:crypto'
 import type { IncomingHttpHeaders } from 'node:http'
 import { z } from 'zod'
+import {
+  AUTHORIZATION_HEADER,
+  BEARER_PREFIX,
+  CALL_CHAIN_ENTRY_PATTERN,
+  CALL_CHAIN_HEADER,
+  MAX_CALL_CHAIN,
+  SERVICE_ID_HEADER,
+  TRACE_ID_HEADER,
+  TRACE_ID_PATTERN
+} from '../constants'
 import { forbidden, unauthorized } from '../errors'
 import type { Logger } from '../logging'
 import { withTrace } from '../logging'
+import type { PermissionName } from '../permissions'
 
-export const TRACE_ID_HEADER = 'x-trace-id'
-export const CALL_CHAIN_HEADER = 'x-call-chain'
-export const SERVICE_ID_HEADER = 'x-service-id'
+const UNSIGNED_JWT_HEADER = '{"alg":"none","typ":"JWT"}'
 
 /** Claims used for authorization only. The token is decoded, NOT verified (trusted internal network, see CLAUDE.md "Auth"). */
+export { CALL_CHAIN_HEADER, SERVICE_ID_HEADER, TRACE_ID_HEADER }
+
 export const identitySchema = z.looseObject({
   sub: z.string(),
   roles: z.array(z.string()).default([]),
@@ -33,7 +44,7 @@ export const decodeJwt = (jwt: string): Identity | undefined => {
 export const unsignedJwt = (
   claims: Identity | { sub: string; roles?: string[]; permissions?: string[] }
 ) =>
-  ['{"alg":"none","typ":"JWT"}', JSON.stringify(claims)]
+  [UNSIGNED_JWT_HEADER, JSON.stringify(claims)]
     .map(p => Buffer.from(p).toString('base64url'))
     .join('.') + '.'
 
@@ -56,10 +67,6 @@ const header = (h: IncomingHttpHeaders | Headers, name: string) => {
   return (Array.isArray(v) ? v[0] : v) ?? undefined
 }
 
-const TRACE_ID = /^[\w-]{8,64}$/
-const CHAIN_ENTRY = /^[\w-]{1,64}$/
-const MAX_CHAIN = 16
-
 /**
  * `selfServiceId` is appended to the incoming chain; an absent or malformed trace id is replaced by a new one.
  * `jwtOverride` replaces the bearer token for callers that hold it elsewhere (web: the session in Redis).
@@ -71,18 +78,20 @@ export const baseContextFromHeaders = (
   jwtOverride?: string
 ): BaseContext => {
   const incoming = header(headers, TRACE_ID_HEADER)
-  const traceId = incoming && TRACE_ID.test(incoming) ? incoming : randomUUID()
+  const traceId =
+    incoming && TRACE_ID_PATTERN.test(incoming) ? incoming : randomUUID()
 
   const callChain = [
     ...(header(headers, CALL_CHAIN_HEADER)
       ?.split(',')
       .map(s => s.trim())
-      .filter(s => CHAIN_ENTRY.test(s)) ?? []),
+      .filter(s => CALL_CHAIN_ENTRY_PATTERN.test(s)) ?? []),
     selfServiceId
-  ].slice(-MAX_CHAIN)
+  ].slice(-MAX_CALL_CHAIN)
 
   const jwt =
-    jwtOverride ?? header(headers, 'authorization')?.replace(/^Bearer\s+/i, '')
+    jwtOverride ??
+    header(headers, AUTHORIZATION_HEADER)?.replace(BEARER_PREFIX, '')
   const identity = jwt ? decodeJwt(jwt) : undefined
   const serviceId = header(headers, SERVICE_ID_HEADER)
 
@@ -105,7 +114,7 @@ export const requireIdentity = (ctx: BaseContext): Identity =>
 
 export const requirePermission = (
   ctx: BaseContext,
-  permission: string
+  permission: PermissionName
 ): Identity => {
   const identity = requireIdentity(ctx)
 

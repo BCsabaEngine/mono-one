@@ -1,10 +1,10 @@
 import { z } from 'zod'
+import { deletedSchema, id, idInput, idsInput, text } from '@lib/zod'
 import { ADDRESS_TYPES, CONTACT_TYPES, EU_COUNTRIES } from './domain'
 
 export { ADDRESS_TYPES, CONTACT_TYPES, EU_COUNTRIES }
 
-const id = z.number().int().positive()
-const text = z.string().trim().min(1)
+export { deletedSchema, idInput as deleteInput }
 
 const timestamps = {
   createdAt: z.iso.datetime(),
@@ -52,10 +52,10 @@ export const customerSchema = z.object({
 })
 export type Customer = z.infer<typeof customerSchema>
 
-export const getCustomerInput = z.object({ id })
+export const getCustomerInput = idInput
 export type GetCustomerInput = z.infer<typeof getCustomerInput>
 
-export const listCustomersInput = z.object({ ids: z.array(id).min(1).max(100) })
+export const listCustomersInput = idsInput
 export type ListCustomersInput = z.infer<typeof listCustomersInput>
 
 // optional columns: `null` clears the value on update, omitted leaves it as it is
@@ -97,9 +97,6 @@ export const updateContactInput = z
   .object({ id })
   .extend(z.object(contactFields).partial().shape)
 export type UpdateContactInput = z.infer<typeof updateContactInput>
-
-export const deleteInput = z.object({ id })
-export const deletedSchema = z.object({ id })
 
 /** Ports implemented by apps/customer-service, consumed by the router in customer-api. */
 export interface CustomersService {

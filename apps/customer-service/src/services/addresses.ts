@@ -51,11 +51,9 @@ export class AddressesServiceImpl implements AddressesService {
   }
 
   async delete(id: number) {
-    const now = new Date()
-
     const [row] = await this.db
       .update(address)
-      .set({ deletedAt: now, updatedAt: now })
+      .set({ deletedAt: new Date() })
       .where(and(eq(address.id, id), isNull(address.deletedAt)))
       .returning({ id: address.id })
 

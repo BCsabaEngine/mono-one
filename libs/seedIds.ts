@@ -11,8 +11,13 @@ export type SeedEntity = keyof typeof PREFIX
 export const seedId = (entity: SeedEntity, n: number) =>
   `${String(PREFIX[entity]).padStart(8, '0')}-0000-4000-8000-${String(n).padStart(12, '0')}`
 
+/** Every number on the scale, in order: 1..100. */
+export const seedNumbers = () =>
+  Array.from(
+    { length: SEED_SCALE.max - SEED_SCALE.min + 1 },
+    (_, i) => SEED_SCALE.min + i
+  )
+
 /** All ids of an entity on the scale, in order; index i belongs to `SEED_SCALE.min + i`. */
 export const seedIds = (entity: SeedEntity) =>
-  Array.from({ length: SEED_SCALE.max - SEED_SCALE.min + 1 }, (_, i) =>
-    seedId(entity, SEED_SCALE.min + i)
-  )
+  seedNumbers().map(n => seedId(entity, n))

@@ -48,9 +48,7 @@ export const appRouter = router({
     list: authed
       .input(listCustomersInput)
       .output(z.array(customerSchema))
-      .query(({ input, ctx }) =>
-        ctx.services.customers.list([...new Set(input.ids)])
-      ),
+      .query(({ input, ctx }) => ctx.services.customers.list(input.ids)),
 
     add: admin
       .input(addCustomerInput)

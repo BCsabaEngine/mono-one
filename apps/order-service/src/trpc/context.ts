@@ -1,6 +1,5 @@
 import type { IncomingHttpHeaders } from 'node:http'
-import { asValue } from 'awilix'
-import { baseContextFromHeaders } from '@lib/trpc'
+import { scopedContext } from '@lib/trpc'
 import type { OrderContext } from '@api/order'
 import type { Container, Dependencies } from '../container'
 
@@ -8,21 +7,8 @@ import type { Container, Dependencies } from '../container'
 export const createContext =
   (container: Container) =>
   (headers: IncomingHttpHeaders): OrderContext => {
-    const base = baseContextFromHeaders(
-      headers,
-      container.cradle.log,
-      container.cradle.config.SERVICE_ID
-    )
+    const { base, services } = scopedContext<Dependencies>(container, headers)
+    const { orders, orderDetails } = services
 
-    const scope = container
-      .createScope<Dependencies>()
-      .register({ log: asValue(base.log) })
-
-    return {
-      ...base,
-      services: {
-        orders: scope.cradle.orders,
-        orderDetails: scope.cradle.orderDetails
-      }
-    }
+    return { ...base, services: { orders, orderDetails } }
   }

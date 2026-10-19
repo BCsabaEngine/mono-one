@@ -2,7 +2,9 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { createHTTPHandler } from '@trpc/server/adapters/standalone'
 import type { AnyTRPCRouter, inferRouterContext } from '@trpc/server'
+import { EVENTS_PATH, HEALTH_PATH, READY_PATH, TRPC_PATH } from '../constants'
 import type { Logger } from '../logging'
+import { baseContextFromHeaders } from './context'
 
 type Mount<R extends AnyTRPCRouter> = {
   router: R
@@ -16,8 +18,11 @@ export interface ServiceServerOptions<
   E extends AnyTRPCRouter
 > {
   log: Logger
+  /** appended to the call chain of incoming requests */
+  serviceId: string
   trpc: Mount<A>
-  events: Mount<E>
+  /** events are always mounted with the plain base context */
+  events: E
   /** readiness probe, e.g. the database ping */
   ready: () => Promise<void>
 }
@@ -33,27 +38,29 @@ export const createServiceServer = <
   E extends AnyTRPCRouter
 >({
   log,
+  serviceId,
   trpc,
   events,
   ready
 }: ServiceServerOptions<A, E>): Server => {
   const trpcHandler = createHTTPHandler({
-    basePath: '/trpc/',
+    basePath: `${TRPC_PATH}/`,
     router: trpc.router,
     createContext: ({ req }) => trpc.createContext(req.headers)
   })
 
   const eventsHandler = createHTTPHandler({
-    basePath: '/events/',
-    router: events.router,
-    createContext: ({ req }) => events.createContext(req.headers)
+    basePath: `${EVENTS_PATH}/`,
+    router: events,
+    createContext: ({ req }) =>
+      baseContextFromHeaders(req.headers, log, serviceId)
   })
 
   return createServer((req, res) => {
     const url = req.url ?? '/'
 
-    if (url === '/healthz') return json(res, 200, { status: 'ok' })
-    if (url === '/readyz')
+    if (url === HEALTH_PATH) return json(res, 200, { status: 'ok' })
+    if (url === READY_PATH)
       return void ready().then(
         () => json(res, 200, { status: 'ready' }),
         err => (
@@ -62,8 +69,8 @@ export const createServiceServer = <
         )
       )
 
-    if (url.startsWith('/trpc/')) return trpcHandler(req, res)
-    if (url.startsWith('/events/')) return eventsHandler(req, res)
+    if (url.startsWith(`${TRPC_PATH}/`)) return trpcHandler(req, res)
+    if (url.startsWith(`${EVENTS_PATH}/`)) return eventsHandler(req, res)
 
     json(res, 404, { error: 'not found' })
   })

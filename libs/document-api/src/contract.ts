@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import type { CallContext } from '@lib/trpc'
+import { id } from '@lib/zod'
 
 export const generateOrderDocumentInput = z.object({
-  orderId: z.number().int().positive()
+  orderId: id
 })
 export type GenerateOrderDocumentInput = z.infer<
   typeof generateOrderDocumentInput
@@ -10,7 +11,7 @@ export type GenerateOrderDocumentInput = z.infer<
 
 /** A generated file. Markdown today; PDF later (then `content` becomes base64, announced by a new `contentType`). */
 export const generatedDocumentSchema = z.object({
-  orderId: z.number().int().positive(),
+  orderId: id,
   filename: z.string(),
   contentType: z.enum(['text/markdown']),
   content: z.string()

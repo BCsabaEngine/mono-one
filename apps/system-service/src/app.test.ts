@@ -2,13 +2,13 @@ import { eq } from 'drizzle-orm'
 import { pushSchema } from 'drizzle-kit/api'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
-  listen,
   silentLogger,
   startPostgres,
-  testBaseConfig
+  testBaseConfig,
+  testClient
 } from '@lib/testing'
-import { createServiceClient, unsignedJwt } from '@lib/trpc'
-import type { CallContext } from '@lib/trpc'
+import { unsignedJwt } from '@lib/trpc'
+import type { CallContext, createServiceClient } from '@lib/trpc'
 import type { AppRouter } from '@api/system'
 import { createApp } from './app'
 import type { Config } from './config'
@@ -40,11 +40,7 @@ describe('system-service (real Postgres)', () => {
       await pushSchema(schema, app.container.cradle.database.db as never)
     ).apply()
 
-    client = createServiceClient<AppRouter>({
-      url: `${await listen(app.server)}/trpc`,
-      serviceId: 'test',
-      timeoutMs: 5000
-    })
+    client = await testClient<AppRouter>(app.server)
   })
 
   afterAll(async () => {
@@ -67,7 +63,7 @@ describe('system-service (real Postgres)', () => {
       id: 1,
       email: 'hello@mono.hu',
       name: 'Hello',
-      deleted: null
+      deletedAt: null
     })
     expect(hello.permissions).toContain('user.admin')
     expect(hello).not.toHaveProperty('password')
@@ -125,8 +121,8 @@ describe('system-service (real Postgres)', () => {
       name: 'Anna',
       permissions: ['document.read']
     })
-    expect(Date.parse(updated.updated)).toBeGreaterThanOrEqual(
-      Date.parse(added.updated)
+    expect(Date.parse(updated.updatedAt)).toBeGreaterThanOrEqual(
+      Date.parse(added.updatedAt)
     )
 
     await expect(
@@ -170,16 +166,16 @@ describe('system-service (real Postgres)', () => {
     expect(await client.users.delete.mutate({ id }, admin)).toEqual({ id })
 
     const first = await client.users.get.query({ id }, plain)
-    expect(first.deleted).not.toBeNull()
+    expect(first.deletedAt).not.toBeNull()
     expect(first.permissions).toEqual(['order.place'])
 
     await client.users.delete.mutate({ id }, admin)
-    expect((await client.users.get.query({ id }, plain)).deleted).toBe(
-      first.deleted
+    expect((await client.users.get.query({ id }, plain)).deletedAt).toBe(
+      first.deletedAt
     )
     expect(
-      (await client.users.getMany.query({ ids: [id] }, plain))[0]?.deleted
-    ).toBe(first.deleted)
+      (await client.users.getMany.query({ ids: [id] }, plain))[0]?.deletedAt
+    ).toBe(first.deletedAt)
 
     await expect(
       client.users.auth.mutate({ email: 'carl@mono.hu', password: 'c' })

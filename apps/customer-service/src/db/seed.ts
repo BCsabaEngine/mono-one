@@ -1,8 +1,11 @@
 import { sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import { SEED_SCALE } from '@lib/seedIds'
+import { seedNumbers } from '@lib/seedIds'
 import { address, contact, customer } from './schema'
 import type * as schema from './schema'
+
+const CODE_DIGITS = 4
+const SEED_ADDRESS = { country: 'HU', zip: '1051', city: 'Budapest' } as const
 
 /** Wipes the tables (identities restart at 1, so customer n has id n) and inserts one customer per n of the shared seed scale, each with an hq address and a sales contact. */
 export const seed = (db: NodePgDatabase<typeof schema>) =>
@@ -11,14 +14,9 @@ export const seed = (db: NodePgDatabase<typeof schema>) =>
       sql`truncate table ${contact}, ${address}, ${customer} restart identity`
     )
 
-    const ns = Array.from(
-      { length: SEED_SCALE.max - SEED_SCALE.min + 1 },
-      (_, i) => SEED_SCALE.min + i
-    )
-
     await tx.insert(customer).values(
-      ns.map(n => ({
-        code: `C-${String(n).padStart(4, '0')}`,
+      seedNumbers().map(n => ({
+        code: `C-${String(n).padStart(CODE_DIGITS, '0')}`,
         name: `Customer ${n}`
       }))
     )
@@ -31,9 +29,7 @@ export const seed = (db: NodePgDatabase<typeof schema>) =>
       ids.map(customerId => ({
         customerId,
         type: 'hq' as const,
-        country: 'HU' as const,
-        zip: '1051',
-        city: 'Budapest',
+        ...SEED_ADDRESS,
         address: `Example utca ${customerId}`
       }))
     )

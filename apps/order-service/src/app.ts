@@ -1,8 +1,7 @@
 import type { Logger } from '@lib/logging'
-import { baseContextFromHeaders, createServiceServer } from '@lib/trpc'
+import { applyOverrides, createServiceServer } from '@lib/trpc'
 import { appRouter } from '@api/order'
 import type { Config } from './config'
-import { asValue } from 'awilix'
 import { buildContainer } from './container'
 import type { Dependencies } from './container'
 import { eventsRouter } from './events'
@@ -16,18 +15,13 @@ export const createApp = (
 ) => {
   const container = buildContainer(config, log)
 
-  Object.entries(overrides).forEach(([name, value]) =>
-    container.register({ [name]: asValue(value) })
-  )
+  applyOverrides(container, overrides)
 
   const server = createServiceServer({
     log,
+    serviceId: config.SERVICE_ID,
     trpc: { router: appRouter, createContext: createContext(container) },
-    events: {
-      router: eventsRouter,
-      createContext: headers =>
-        baseContextFromHeaders(headers, log, config.SERVICE_ID)
-    },
+    events: eventsRouter,
     ready: container.cradle.database.ping
   })
 

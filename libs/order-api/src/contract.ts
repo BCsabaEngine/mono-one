@@ -1,11 +1,16 @@
 import { z } from 'zod'
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@lib/constants'
+import { deletedSchema, id, idInput, text } from '@lib/zod'
 
-const id = z.number().int().positive()
-const text = z.string().trim().min(1)
+export { deletedSchema, idInput as deleteInput }
 
 // money is in minor units (e.g. cents); the caps keep quantity * unitPrice, summed over a whole order, a safe integer
-const quantity = z.number().int().positive().max(100_000)
-const unitPrice = z.number().int().positive().max(100_000_000)
+const MAX_QUANTITY = 100_000
+const MAX_UNIT_PRICE = 100_000_000
+const MAX_DETAILS = 200
+
+const quantity = z.number().int().positive().max(MAX_QUANTITY)
+const unitPrice = z.number().int().positive().max(MAX_UNIT_PRICE)
 
 const timestamps = { createdAt: z.iso.datetime(), updatedAt: z.iso.datetime() }
 
@@ -45,13 +50,13 @@ export const createOrderInput = z.object({
   title: text,
   comment: text.nullish(),
   deliveryAddressId: id,
-  details: z.array(z.object(detailFields)).min(1).max(200)
+  details: z.array(z.object(detailFields)).min(1).max(MAX_DETAILS)
 })
 export type CreateOrderInput = z.infer<typeof createOrderInput>
 
 export const listOrdersInput = z.object({
   customerId: id.optional(),
-  limit: z.number().int().min(1).max(100).default(50),
+  limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   offset: z.number().int().min(0).default(0)
 })
 export type ListOrdersInput = z.infer<typeof listOrdersInput>
@@ -59,10 +64,8 @@ export type ListOrdersInput = z.infer<typeof listOrdersInput>
 export const addOrderDetailInput = z.object({ orderId: id, ...detailFields })
 export type AddOrderDetailInput = z.infer<typeof addOrderDetailInput>
 
-export const deleteInput = z.object({ id })
-export const getOrderInput = z.object({ id })
+export const getOrderInput = idInput
 export type GetOrderInput = z.infer<typeof getOrderInput>
-export const deletedSchema = z.object({ id })
 
 /** Identity and correlation data the service forwards to other services (see `callContextOf`). */
 export interface CallerInfo {

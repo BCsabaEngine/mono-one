@@ -1,6 +1,6 @@
 import { TRPCClientError } from '@trpc/client'
 import { initTRPC, TRPCError } from '@trpc/server'
-import { DomainError } from '../errors'
+import { DomainError, notFound } from '../errors'
 import type { DomainErrorCode } from '../errors'
 import type { BaseContext } from './context'
 
@@ -72,3 +72,15 @@ export const fromClientError = (err: unknown): never => {
     ? new TRPCError({ code, message: (err as Error).message, cause: err })
     : err
 }
+
+export const isNotFound = (err: unknown) =>
+  err instanceof TRPCClientError && err.data?.code === 'NOT_FOUND'
+
+/** `.catch` handler for a downstream call: a downstream NOT_FOUND becomes this service's own NOT_FOUND, other errors keep their code. */
+export const notFoundOr =
+  (what: string, id: number) =>
+  (err: unknown): never => {
+    if (isNotFound(err)) throw notFound(what, String(id))
+
+    return fromClientError(err)
+  }

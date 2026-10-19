@@ -2,13 +2,13 @@ import { pushSchema } from 'drizzle-kit/api'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SEED_SCALE } from '@lib/seedIds'
 import {
-  listen,
   silentLogger,
   startPostgres,
-  testBaseConfig
+  testBaseConfig,
+  testClient
 } from '@lib/testing'
-import { createServiceClient, unsignedJwt } from '@lib/trpc'
-import type { CallContext } from '@lib/trpc'
+import { unsignedJwt } from '@lib/trpc'
+import type { CallContext, createServiceClient } from '@lib/trpc'
 import type { AppRouter } from '@api/customer'
 import { createApp } from './app'
 import type { Config } from './config'
@@ -52,11 +52,7 @@ describe('customer-service (real Postgres)', () => {
     ).apply()
     await seed(app.container.cradle.database.db)
 
-    client = createServiceClient<AppRouter>({
-      url: `${await listen(app.server)}/trpc`,
-      serviceId: 'test',
-      timeoutMs: 5000
-    })
+    client = await testClient<AppRouter>(app.server)
   })
 
   afterAll(async () => {

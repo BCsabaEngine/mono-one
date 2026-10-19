@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { CommonEnv } from '@lib/config'
+import { EVENTS_PATH } from '@lib/constants'
 import { badRequest, forbidden } from '@lib/errors'
 import type { Logger } from '@lib/logging'
 import { baseEnvelope, deliverAck } from './contract'
@@ -49,7 +50,7 @@ export const createPublisher = <S extends ServiceId>({
       .set(
         target,
         createServiceClient<EventsRouter>({
-          url: `${urls[target]}/events`,
+          url: `${urls[target]}${EVENTS_PATH}`,
           serviceId,
           timeoutMs
         })
@@ -69,7 +70,7 @@ export const createPublisher = <S extends ServiceId>({
     const event = def.schema.parse({
       id: randomUUID(),
       type,
-      version: 1,
+      version: def.schema.shape.version.value,
       occurredAt: new Date().toISOString(),
       traceId,
       ...(opts.userId && { userId: opts.userId }),
@@ -193,3 +194,8 @@ export const createEventsRouter = <S extends ServiceId>(
     })
   })
 }
+
+/** For services that own no events and subscribe to none: the handler map is empty (checked by the compiler). */
+export const emptyEventsRouter = <S extends ServiceId>(
+  serviceId: S & ([EventsFor<S>] extends [never] ? S : never)
+) => createEventsRouter(serviceId, {} as Handlers<S>)

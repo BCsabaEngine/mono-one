@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import type { Executor } from '@lib/db'
 import { conflict, isUniqueViolation, notFound } from '@lib/errors'
+import { inIdOrder, toStamps } from '@lib/stamps'
 import type {
   AddCustomerInput,
   Customer,
@@ -10,9 +11,7 @@ import type {
 import type { Dependencies } from '../container'
 import { address, contact, customer } from '../db/schema'
 import type * as schema from '../db/schema'
-import { toAddress, toContact, toStamps } from './mappers'
-
-type Executor = Pick<NodePgDatabase<typeof schema>, 'select'> // the db or a transaction
+import { toAddress, toContact } from './mappers'
 
 const duplicateCode = (err: unknown): never => {
   throw isUniqueViolation(err) ? conflict('Customer code already in use') : err
@@ -34,7 +33,7 @@ export class CustomersServiceImpl implements CustomersService {
   /** Customers with their active addresses and contacts in three queries (no N+1), in the order of `ids`; unknown ids are omitted. */
   private async load(
     ids: number[],
-    db: Executor = this.db
+    db: Executor<typeof schema> = this.db
   ): Promise<Customer[]> {
     const [rows, addresses, contacts] = await Promise.all([
       db.select().from(customer).where(inArray(customer.id, ids)),
@@ -65,10 +64,10 @@ export class CustomersServiceImpl implements CustomersService {
     addresses.forEach(a => byId.get(a.customerId)?.addresses.push(toAddress(a)))
     contacts.forEach(c => byId.get(c.customerId)?.contacts.push(toContact(c)))
 
-    return ids.flatMap(id => byId.get(id) ?? [])
+    return inIdOrder(ids, [...byId.values()])
   }
 
-  private async loadOne(id: number, db?: Executor) {
+  private async loadOne(id: number, db?: Executor<typeof schema>) {
     const [found] = await this.load([id], db)
     if (!found) throw notFound('Customer', String(id))
 
@@ -122,11 +121,9 @@ export class CustomersServiceImpl implements CustomersService {
       .where(eq(customer.id, id))
     if (!existing) throw notFound('Customer', String(id))
 
-    const now = new Date()
-
     await this.db
       .update(customer)
-      .set({ deletedAt: now, updatedAt: now })
+      .set({ deletedAt: new Date() })
       .where(and(eq(customer.id, id), isNull(customer.deletedAt)))
 
     this.log.info({ customerId: id }, 'customer deleted')

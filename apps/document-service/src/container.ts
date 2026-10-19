@@ -1,12 +1,7 @@
-import {
-  asClass,
-  asFunction,
-  asValue,
-  createContainer,
-  InjectionMode
-} from 'awilix'
+import { asClass, createContainer, InjectionMode } from 'awilix'
 import type { Logger } from '@lib/logging'
-import { createServiceClient } from '@lib/trpc'
+import { baseRegistrations, serviceClientRegistration } from '@lib/trpc'
+import type { createServiceClient } from '@lib/trpc'
 import type { AppRouter as CustomerAppRouter } from '@api/customer'
 import type { AppRouter as OrderAppRouter } from '@api/order'
 import type { Config } from './config'
@@ -20,26 +15,16 @@ export interface Dependencies {
   documents: DocumentsServiceImpl
 }
 
+/** Root container; no database, so nothing to dispose but the clients. */
 export const buildContainer = (config: Config, log: Logger) =>
   createContainer<Dependencies>({
     injectionMode: InjectionMode.PROXY
   }).register({
-    config: asValue(config),
-    log: asValue(log),
-    orderClient: asFunction(({ config }: Dependencies) =>
-      createServiceClient<OrderAppRouter>({
-        url: `${config.ORDER_SERVICE_URL}/trpc`,
-        serviceId: config.SERVICE_ID,
-        timeoutMs: config.REQUEST_TIMEOUT_MS
-      })
-    ).singleton(),
-    customerClient: asFunction(({ config }: Dependencies) =>
-      createServiceClient<CustomerAppRouter>({
-        url: `${config.CUSTOMER_SERVICE_URL}/trpc`,
-        serviceId: config.SERVICE_ID,
-        timeoutMs: config.REQUEST_TIMEOUT_MS
-      })
-    ).singleton(),
+    ...baseRegistrations(config, log),
+    orderClient: serviceClientRegistration<OrderAppRouter>('ORDER_SERVICE_URL'),
+    customerClient: serviceClientRegistration<CustomerAppRouter>(
+      'CUSTOMER_SERVICE_URL'
+    ),
     documents: asClass(DocumentsServiceImpl).scoped()
   })
 

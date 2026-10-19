@@ -1,5 +1,6 @@
 import { pino } from 'pino'
 import type { Logger } from 'pino'
+import { REDACTED } from './constants'
 
 export type { Logger }
 
@@ -25,7 +26,7 @@ export const createLogger = ({
         '*.token',
         '*.secret'
       ],
-      censor: '[redacted]'
+      censor: REDACTED
     }
   })
 

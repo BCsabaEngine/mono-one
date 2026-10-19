@@ -1,13 +1,11 @@
-import { baseEnvSchema, loadConfig } from './config'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import { createDb } from './db'
-import { createLogger } from './logging'
+import { withServiceDb } from './db'
 
 /**
  * Standard `seed` entry point: each service calls this from its own src/seed.ts.
  * `run` wipes the service's tables and inserts the seed data (in one transaction of its own). Never for production.
  */
-export const seedService = async <TSchema extends Record<string, unknown>>({
+export const seedService = <TSchema extends Record<string, unknown>>({
   serviceId,
   schema,
   run
@@ -15,26 +13,15 @@ export const seedService = async <TSchema extends Record<string, unknown>>({
   serviceId: string
   schema: TSchema
   run: (db: NodePgDatabase<TSchema>) => Promise<void>
-}) => {
-  const config = loadConfig(baseEnvSchema, {
-    SERVICE_ID: serviceId,
-    ...process.env
-  })
+}) =>
+  withServiceDb(
+    serviceId,
+    async ({ config, log, db }) => {
+      if (config.NODE_ENV === 'production')
+        throw new Error('Refusing to seed: NODE_ENV is production')
 
-  if (config.NODE_ENV === 'production')
-    throw new Error('Refusing to seed: NODE_ENV is production')
-
-  const logger = createLogger({
-    service: serviceId,
-    level: config.LOG_LEVEL
-  })
-
-  const { db, close } = createDb(config, logger, schema)
-
-  try {
-    await run(db)
-    logger.info('seed done')
-  } finally {
-    await close()
-  }
-}
+      await run(db)
+      log.info('seed done')
+    },
+    schema
+  )

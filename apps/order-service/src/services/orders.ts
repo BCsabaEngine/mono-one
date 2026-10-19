@@ -1,6 +1,7 @@
-import { TRPCClientError } from '@trpc/client'
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import { badRequest, notFound } from '@lib/errors'
+import { toStamps } from '@lib/stamps'
+import { notFoundOr } from '@lib/trpc'
 import type {
   CallerInfo,
   CreateOrderInput,
@@ -11,7 +12,7 @@ import type {
 } from '@api/order'
 import type { Dependencies } from '../container'
 import { order, orderDetail } from '../db/schema'
-import { toDetail, toStamps } from './mappers'
+import { toDetail } from './mappers'
 
 export class OrdersServiceImpl implements OrdersService {
   private readonly database: Dependencies['database']
@@ -44,11 +45,7 @@ export class OrdersServiceImpl implements OrdersService {
     // service-to-service call; the user's JWT is forwarded because customer-service authorizes on it
     const customer = await customerClient.customers.get
       .query({ id: fields.customerId }, { context: { ...caller } })
-      .catch(err => {
-        throw err instanceof TRPCClientError && err.data?.code === 'NOT_FOUND'
-          ? notFound('Customer', String(fields.customerId))
-          : err
-      })
+      .catch(notFoundOr('Customer', fields.customerId))
     if (customer.deletedAt)
       throw notFound('Customer', String(fields.customerId))
 
@@ -163,11 +160,9 @@ export class OrdersServiceImpl implements OrdersService {
       .where(eq(order.id, id))
     if (!existing) throw notFound('Order', String(id))
 
-    const now = new Date()
-
     await this.db
       .update(order)
-      .set({ deletedAt: now, updatedAt: now })
+      .set({ deletedAt: new Date() })
       .where(and(eq(order.id, id), isNull(order.deletedAt)))
 
     this.log.info({ orderId: id }, 'order deleted')

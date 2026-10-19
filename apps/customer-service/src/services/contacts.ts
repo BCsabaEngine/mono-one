@@ -51,11 +51,9 @@ export class ContactsServiceImpl implements ContactsService {
   }
 
   async delete(id: number) {
-    const now = new Date()
-
     const [row] = await this.db
       .update(contact)
-      .set({ deletedAt: now, updatedAt: now })
+      .set({ deletedAt: new Date() })
       .where(and(eq(contact.id, id), isNull(contact.deletedAt)))
       .returning({ id: contact.id })
 

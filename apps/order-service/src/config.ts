@@ -1,10 +1,7 @@
-import { z } from 'zod'
-import { baseEnvSchema, loadConfig } from '@lib/config'
+import type { z } from 'zod'
+import { baseEnvSchema, loadConfig, serviceEnv } from '@lib/config'
 
-const schema = baseEnvSchema.extend({
-  SERVICE_ID: z.string().default('order-service'),
-  PORT: z.coerce.number().int().positive().default(3002)
-})
+const schema = baseEnvSchema.extend(serviceEnv('order-service'))
 
 export type Config = z.infer<typeof schema>
 export const loadServiceConfig = (): Config => loadConfig(schema)

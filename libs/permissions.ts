@@ -7,3 +7,4 @@ export const PERMISSIONS = [
   'order.place',
   'document.read'
 ] as const
+export type PermissionName = (typeof PERMISSIONS)[number]

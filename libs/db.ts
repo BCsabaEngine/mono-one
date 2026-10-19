@@ -1,7 +1,9 @@
 import { drizzle } from 'drizzle-orm/node-postgres'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
+import { baseEnvSchema, loadConfig } from './config'
 import type { BaseEnv } from './config'
+import { createLogger } from './logging'
 import type { Logger } from './logging'
 
 export type DbConfig = Pick<
@@ -61,3 +63,32 @@ export const createDb = <
 export type Db<
   TSchema extends Record<string, unknown> = Record<string, never>
 > = ReturnType<typeof createDb<TSchema>>
+
+/** What a query helper needs: the database itself or a transaction. */
+export type Executor<
+  TSchema extends Record<string, unknown> = Record<string, never>
+> = Pick<NodePgDatabase<TSchema>, 'select'>
+
+/** Config, logger and database of a service for a one-off script (migrate, seed); the pool is closed afterwards. */
+export const withServiceDb = async <
+  T,
+  TSchema extends Record<string, unknown> = Record<string, never>
+>(
+  serviceId: string,
+  run: (ctx: { config: BaseEnv; log: Logger } & Db<TSchema>) => Promise<T>,
+  schema?: TSchema
+) => {
+  const config = loadConfig(baseEnvSchema, {
+    SERVICE_ID: serviceId,
+    ...process.env
+  })
+
+  const log = createLogger({ service: serviceId, level: config.LOG_LEVEL })
+  const database = createDb(config, log, schema)
+
+  try {
+    return await run({ config, log, ...database })
+  } finally {
+    await database.close()
+  }
+}

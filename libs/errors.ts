@@ -1,3 +1,5 @@
+import { PG_UNIQUE_VIOLATION } from './constants'
+
 export type DomainErrorCode =
   | 'NOT_FOUND'
   | 'BAD_REQUEST'
@@ -31,10 +33,10 @@ export const forbidden = (message = 'Forbidden') =>
 export const unauthorized = (message = 'Unauthorized') =>
   new DomainError('UNAUTHORIZED', message)
 
-/** Postgres unique violation (23505), also when wrapped in a `cause` chain (Drizzle wraps driver errors). */
+/** Postgres unique violation, also when wrapped in a `cause` chain (Drizzle wraps driver errors). */
 export const isUniqueViolation = (err: unknown): boolean =>
   typeof err === 'object' &&
   err !== null &&
   ('code' in err
-    ? err.code === '23505'
+    ? err.code === PG_UNIQUE_VIOLATION
     : 'cause' in err && isUniqueViolation(err.cause))

@@ -1,27 +1,26 @@
 import { z } from 'zod'
-import { PERMISSIONS } from './permissions'
+import { PERMISSIONS } from '@lib/permissions'
+import { deletedSchema, id, idInput, idsInput } from '@lib/zod'
 
-export { PERMISSIONS }
+export { deletedSchema, PERMISSIONS }
 
 export const permissionSchema = z.enum(PERMISSIONS)
 export type Permission = z.infer<typeof permissionSchema>
 
-const id = z.number().int().positive()
-
-/** Never carries the password or its hash. A soft-deleted user is still returned, with `deleted` set. */
+/** Never carries the password or its hash. A soft-deleted user is still returned, with `deletedAt` set. */
 export const userSchema = z.object({
   id,
   email: z.email(),
   name: z.string(),
   permissions: z.array(permissionSchema),
-  created: z.iso.datetime(),
-  updated: z.iso.datetime(),
-  deleted: z.iso.datetime().nullable()
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  deletedAt: z.iso.datetime().nullable() // null = active (soft delete)
 })
 export type User = z.infer<typeof userSchema>
 
-export const getUserInput = z.object({ id })
-export const getUsersInput = z.object({ ids: z.array(id).min(1).max(100) })
+export const getUserInput = idInput
+export const getUsersInput = idsInput
 export const authUserInput = z.object({
   email: z.email(),
   password: z.string().min(1)
@@ -44,7 +43,7 @@ export const updateUserInput = z.object({
 })
 export type UpdateUserInput = z.infer<typeof updateUserInput>
 
-export const deleteUserInput = z.object({ id })
+export const deleteUserInput = idInput
 
 /** Port implemented by apps/system-service, consumed by the router in system-api. */
 export interface UsersService {

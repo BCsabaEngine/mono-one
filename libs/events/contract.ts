@@ -1,14 +1,10 @@
 import { initTRPC } from '@trpc/server'
 import { z } from 'zod'
 
-export const SERVICE_IDS = [
-  'web',
-  'customer-service',
-  'order-service',
-  'document-service',
-  'system-service'
-] as const
-export type ServiceId = (typeof SERVICE_IDS)[number]
+import type { ServiceId } from '@lib/constants'
+
+export { SERVICE_IDS } from '@lib/constants'
+export type { ServiceId }
 
 /** Envelope of every event; `payload` is typed per event by defineEvent. */
 export const baseEnvelope = z.object({

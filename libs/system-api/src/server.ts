@@ -3,6 +3,7 @@ import type { BaseContext } from '@lib/trpc'
 import {
   addUserInput,
   authUserInput,
+  deletedSchema,
   deleteUserInput,
   getUserInput,
   getUsersInput,
@@ -54,7 +55,7 @@ export const appRouter = router({
 
     delete: admin
       .input(deleteUserInput)
-      .output(z.object({ id: z.number() }))
+      .output(deletedSchema)
       .mutation(({ input, ctx }) => ctx.services.users.delete(input.id))
   })
 })

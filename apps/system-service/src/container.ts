@@ -1,12 +1,7 @@
-import {
-  asClass,
-  asFunction,
-  asValue,
-  createContainer,
-  InjectionMode
-} from 'awilix'
-import { createDb } from '@lib/db'
+import { asClass, createContainer, InjectionMode } from 'awilix'
+import type { Db } from '@lib/db'
 import type { Logger } from '@lib/logging'
+import { baseRegistrations, databaseRegistration } from '@lib/trpc'
 import type { Config } from './config'
 import * as schema from './db/schema'
 import { UsersServiceImpl } from './services/users'
@@ -14,7 +9,7 @@ import { UsersServiceImpl } from './services/users'
 export interface Dependencies {
   config: Config
   log: Logger
-  database: ReturnType<typeof createDb<typeof schema>>
+  database: Db<typeof schema>
   users: UsersServiceImpl
 }
 
@@ -23,13 +18,8 @@ export const buildContainer = (config: Config, log: Logger) =>
   createContainer<Dependencies>({
     injectionMode: InjectionMode.PROXY
   }).register({
-    config: asValue(config),
-    log: asValue(log),
-    database: asFunction(({ config, log }: Dependencies) =>
-      createDb(config, log, schema)
-    )
-      .singleton()
-      .disposer(d => d.close()),
+    ...baseRegistrations(config, log),
+    database: databaseRegistration(schema),
     users: asClass(UsersServiceImpl).scoped()
   })
 

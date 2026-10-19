@@ -1,6 +1,4 @@
-import { TRPCClientError } from '@trpc/client'
-import { notFound } from '@lib/errors'
-import { fromClientError } from '@lib/trpc'
+import { notFoundOr } from '@lib/trpc'
 import type { CallContext } from '@lib/trpc'
 import type { DocumentsService, GeneratedDocument } from '@api/document'
 import type { Dependencies } from '../container'
@@ -49,13 +47,3 @@ export class DocumentsServiceImpl implements DocumentsService {
     }
   }
 }
-
-/** Downstream NOT_FOUND becomes this service's NOT_FOUND; other downstream errors keep their code (`fromClientError`). */
-const notFoundOr =
-  (what: string, id: number) =>
-  (err: unknown): never => {
-    if (err instanceof TRPCClientError && err.data?.code === 'NOT_FOUND')
-      throw notFound(what, String(id))
-
-    return fromClientError(err)
-  }

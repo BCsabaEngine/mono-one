@@ -1,15 +1,8 @@
+import { toStamps } from '@lib/stamps'
 import type { Address, Contact } from '@api/customer'
 import type { address, contact } from '../db/schema'
 
-export const toStamps = (r: {
-  createdAt: Date
-  updatedAt: Date
-  deletedAt: Date | null
-}) => ({
-  createdAt: r.createdAt.toISOString(),
-  updatedAt: r.updatedAt.toISOString(),
-  deletedAt: r.deletedAt?.toISOString() ?? null
-})
+export { toStamps }
 
 export const toAddress = (r: typeof address.$inferSelect): Address => ({
   ...r,

@@ -1,6 +1,6 @@
 import { integer, pgTable, text, unique } from 'drizzle-orm/pg-core'
 // eslint-disable-next-line @nx/enforce-module-boundaries -- drizzle-kit loads the schema without tsconfig paths, so no alias
-import { PERMISSIONS } from '../../../../../libs/system-api/src/permissions'
+import { PERMISSIONS } from '../../../../../libs/permissions'
 import { user } from './user'
 
 export const permission = pgTable(

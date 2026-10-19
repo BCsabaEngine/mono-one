@@ -2,10 +2,11 @@ import { createTRPCClient, httpLink } from '@trpc/client'
 import type { TRPCLink } from '@trpc/client'
 import type { AnyTRPCRouter } from '@trpc/server'
 import {
+  AUTHORIZATION_HEADER,
   CALL_CHAIN_HEADER,
   SERVICE_ID_HEADER,
   TRACE_ID_HEADER
-} from './context'
+} from '../constants'
 
 export interface CallContext {
   /** End user's JWT; pass it only when the callee needs the user's identity. */
@@ -52,7 +53,7 @@ export const createServiceClient = <R extends AnyTRPCRouter>(opts: {
             ...(callChain?.length && {
               [CALL_CHAIN_HEADER]: callChain.join(',')
             }),
-            ...(jwt && { authorization: `Bearer ${jwt}` })
+            ...(jwt && { [AUTHORIZATION_HEADER]: `Bearer ${jwt}` })
           }
         }
       }) as TRPCLink<R>

@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis'
+import { TRPC_PATH } from '@lib/constants'
 import { createLogger } from '@lib/logging'
 import { createServiceClient } from '@lib/trpc'
 import type { AppRouter as CustomerRouter } from '@api/customer'
@@ -11,7 +12,7 @@ const build = () => {
 	const config = getConfig()
 
 	const opts = (url: string) => ({
-		url: `${url}/trpc`,
+		url: `${url}${TRPC_PATH}`,
 		serviceId: config.SERVICE_ID,
 		timeoutMs: config.REQUEST_TIMEOUT_MS
 	})

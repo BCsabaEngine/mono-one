@@ -1,12 +1,13 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import type { Executor } from '@lib/db'
 import {
   conflict,
   isUniqueViolation,
   notFound,
   unauthorized
 } from '@lib/errors'
-import { PERMISSIONS } from '@api/system'
+import { PERMISSIONS } from '@lib/permissions'
+import { inIdOrder, toStamps } from '@lib/stamps'
 import type {
   AddUserInput,
   AuthUserInput,
@@ -19,8 +20,6 @@ import type { Dependencies } from '../container'
 import { permission, user } from '../db/schema'
 import type * as schema from '../db/schema'
 import { hashPassword, verifyPassword } from './password'
-
-type Executor = Pick<NodePgDatabase<typeof schema>, 'select'> // the db or a transaction
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 const byPermissionOrder = (a: Permission, b: Permission) =>
@@ -40,7 +39,10 @@ export class UsersServiceImpl implements UsersService {
   }
 
   /** Users with their permissions in two queries (no N+1), in the order of `ids`; unknown ids are omitted. */
-  private async load(ids: number[], db: Executor = this.db): Promise<User[]> {
+  private async load(
+    ids: number[],
+    db: Executor<typeof schema> = this.db
+  ): Promise<User[]> {
     const [rows, perms] = await Promise.all([
       db.select().from(user).where(inArray(user.id, ids)),
       db.select().from(permission).where(inArray(permission.userId, ids))
@@ -54,24 +56,14 @@ export class UsersServiceImpl implements UsersService {
     )
     perms.forEach(p => byId.get(p.userId)?.permissions.push(p.name))
 
-    return ids.flatMap(id => {
-      const u = byId.get(id)
-
-      return u
-        ? [
-            {
-              ...u,
-              permissions: u.permissions.sort(byPermissionOrder),
-              created: u.created.toISOString(),
-              updated: u.updated.toISOString(),
-              deleted: u.deleted?.toISOString() ?? null
-            }
-          ]
-        : []
-    })
+    return inIdOrder(ids, [...byId.values()]).map(u => ({
+      ...u,
+      permissions: u.permissions.sort(byPermissionOrder),
+      ...toStamps(u)
+    }))
   }
 
-  private async loadOne(id: number, db?: Executor) {
+  private async loadOne(id: number, db?: Executor<typeof schema>) {
     const [found] = await this.load([id], db)
     if (!found) throw notFound('User', String(id))
 
@@ -86,7 +78,7 @@ export class UsersServiceImpl implements UsersService {
     const [row] = await this.db
       .select({ id: user.id, password: user.password })
       .from(user)
-      .where(and(eq(user.email, normalizeEmail(email)), isNull(user.deleted)))
+      .where(and(eq(user.email, normalizeEmail(email)), isNull(user.deletedAt)))
     if (!row || !verifyPassword(password, row.password))
       throw unauthorized('Invalid credentials')
 
@@ -126,16 +118,16 @@ export class UsersServiceImpl implements UsersService {
   async update({ id, name, permissions, password }: UpdateUserInput) {
     return this.database.withTransaction(async tx => {
       const [existing] = await tx
-        .select({ deleted: user.deleted })
+        .select({ deletedAt: user.deletedAt })
         .from(user)
         .where(eq(user.id, id))
         .for('update')
-      if (!existing || existing.deleted) throw notFound('User', String(id))
+      if (!existing || existing.deletedAt) throw notFound('User', String(id))
 
       await tx
         .update(user)
         .set({
-          updated: new Date(),
+          updatedAt: new Date(), // also when only the permissions change
           ...(name && { name }),
           ...(password && { password: hashPassword(password) })
         })
@@ -166,8 +158,8 @@ export class UsersServiceImpl implements UsersService {
 
     await this.db
       .update(user)
-      .set({ deleted: new Date(), updated: new Date() })
-      .where(and(eq(user.id, id), isNull(user.deleted)))
+      .set({ deletedAt: new Date() })
+      .where(and(eq(user.id, id), isNull(user.deletedAt)))
 
     this.log.info({ targetUserId: id }, 'user deleted')
     return { id }

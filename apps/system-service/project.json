@@ -12,6 +12,7 @@
     },
     "dev:migrate": {},
     "dev:seed": {},
+    "db-generate": {},
     "docker-build": {}
   }
 }

@@ -1,4 +1,3 @@
-import { createEventsRouter } from '@events/client'
+import { emptyEventsRouter } from '@events/client'
 
-/** system-service owns no events and subscribes to none: the handler map is empty (checked by the compiler). */
-export const eventsRouter = createEventsRouter('system-service', {})
+export const eventsRouter = emptyEventsRouter('system-service')
