@@ -12,7 +12,7 @@ pnpm nx graph
 
 ```bash
 pnpm nx run-many -t build              # bundles into dist/apps/*
-docker compose up -d --build           # postgres, redis, 3 services, web on :3000
+docker compose up -d --build           # postgres, redis, 4 services, web on :3000
 ```
 
 Open http://localhost:3000 and sign in as `hello@mono.hu` / `hello` (seed first: `pnpm nx dev:seed system-service`, plus `customer-service` and `order-service` for demo customers and orders). Only `web` is published to the host.

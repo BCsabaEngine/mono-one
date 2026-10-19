@@ -25,13 +25,13 @@ customer/order/system-service ──> Postgres (one database each; document-serv
 
 ### Apps and example endpoints
 
-| App                | Port | Procedure                                                                                                                                       | Notes                                                                                                          |
-| ------------------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `web`              | 3000 | `auth.*`, `customers.*`, `addresses.*`, `contacts.*`, `orders.*`, `orderDetails.*`, `documents.generateOrderDocument`, `live.orderPlaced` (SSE) | admin UI + BFF: forwards to the services (see Web UI); runs as exactly one instance                            |
-| `customer-service` | 3001 | `customers.get/list/add/update/delete`, `addresses.*`, `contacts.*`                                                                             | customers with addresses and contacts (see Customer service); `web` forwards all of it plus `byIds` and `page` |
-| `order-service`    | 3002 | `orders.create/list/delete`, `orderDetails.add/delete`                                                                                          | orders with details (see Order service); `web` forwards `create/get/list/delete` and `orderDetails.*`          |
-| `document-service` | 3003 | `documents.generateOrderDocument`                                                                                                               | renders an order document on demand, no database (see Document service)                                        |
-| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete`                                                         | users + flat permissions (see System service); later runtime configs, tasks, calendar                          |
+| App                | Port | Procedure                                                                                                                                                  | Notes                                                                                                          |
+| ------------------ | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `web`              | 3000 | `auth.*`, `customers.*`, `addresses.*`, `contacts.*`, `orders.*`, `orderDetails.*`, `documents.generateOrderDocument`, `users.*`, `live.orderPlaced` (SSE) | admin UI + BFF: forwards to the services (see Web UI); runs as exactly one instance                            |
+| `customer-service` | 3001 | `customers.get/list/add/update/delete`, `addresses.*`, `contacts.*`                                                                                        | customers with addresses and contacts (see Customer service); `web` forwards all of it plus `byIds` and `page` |
+| `order-service`    | 3002 | `orders.create/get/list/delete`, `orderDetails.add/delete`                                                                                                 | orders with details (see Order service); `web` forwards `create/get/list/delete` and `orderDetails.*`          |
+| `document-service` | 3003 | `documents.generateOrderDocument`                                                                                                                          | renders an order document on demand, no database (see Document service)                                        |
+| `system-service`   | 3004 | `users.get`, `users.getMany`, `users.auth`, `users.add`, `users.update`, `users.delete`                                                                    | users + flat permissions (see System service); later runtime configs, tasks, calendar                          |
 
 Directions: `web` -> all four, `order-service` -> `customer-service`, `document-service` -> `order-service` and `customer-service`. Demo data: `pnpm nx dev:seed <svc>` (customer-service, order-service, system-service; see Data rules). The web `auth.login` tRPC mutation is the real login (`users.auth`, then an unsigned JWT with `sub`, `permissions`, `email`, `name` stored in Redis; it sets the `sid` cookie through `ctx.cookies`; `auth.logout` deletes the Redis entry and the cookie); seeded starter user `hello@mono.hu` / `hello` (`pnpm nx dev:seed system-service`).
 
@@ -231,8 +231,8 @@ pnpm nx run-many -t build && docker compose up -d --build   # full stack in Dock
 ## Docker and CI
 
 - Every app is fully bundled (`@nx/esbuild:esbuild` for services, configured once in `nx.json` `targetDefaults` and emitting `main.mjs`/`migrate.mjs` plus `migrations/`; adapter-node for `web`), so images contain only the bundle (and migrations, once committed), no `node_modules`. Only `pg-native` (optional) stays external. Build context is the repo root after `nx build`; base image `node:24.21.0-slim`.
-- `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, the three services and `web`.
-- CI (`.github/workflows/ci.yml`, Node from `.nvmrc`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test build`, `docker-build` (everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
+- `docker-compose.yml`: Postgres (one database per service, created by `docker/postgres-init.sql`), Redis, the four services and `web`.
+- CI (`.github/workflows/ci.yml`, Node from `.nvmrc`): `pnpm format:check`, `pnpm lint:check` (nx lint + @lib helpers), `nx run-many -t typecheck test build`. A `docker-build` step is prepared but commented out (it would build everything on every run, not only affected projects). Pushing images to a registry is not set up yet. Deployment/Kubernetes is out of scope.
 
 ## Affected builds
 
