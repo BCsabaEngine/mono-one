@@ -21,7 +21,7 @@ Open http://localhost:3000 and sign in as `hello@mono.hu` / `hello` (seed first:
 
 ```bash
 pnpm dev:infra   # postgres + redis in Docker (docker-compose.dev.yml)
-pnpm env:init    # creates missing .env files from .env.example (first run only)
+pnpm env:init    # creates the root .env from .env.example (first run only)
 pnpm dev:migrate # creates/updates the tables of all services with `drizzle-kit push` (no committed migrations during development)
 pnpm dev:seed    # optional: wipes customer + order + system data and inserts demo data; log in as hello@mono.hu / hello
 pnpm dev         # serves web + the 4 services with reload

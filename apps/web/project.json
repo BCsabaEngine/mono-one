@@ -15,7 +15,7 @@
 			"executor": "nx:run-commands",
 			"continuous": true,
 			"options": {
-				"command": "node --env-file-if-exists=.env ../../node_modules/vite/bin/vite.js dev",
+				"command": "node --env-file-if-exists=../../.env ../../node_modules/vite/bin/vite.js dev",
 				"cwd": "apps/web"
 			}
 		},

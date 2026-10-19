@@ -95,7 +95,7 @@
       "executor": "nx:run-commands",
       "continuous": true,
       "options": {
-        "command": "tsx watch --tsconfig {projectRoot}/tsconfig.json --env-file-if-exists={projectRoot}/.env {projectRoot}/src/main.ts"
+        "command": "tsx watch --tsconfig {projectRoot}/tsconfig.json --env-file-if-exists=.env {projectRoot}/src/main.ts"
       }
     },
     "docker-build": {
@@ -108,14 +108,14 @@
     "dev:seed": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsx --tsconfig {projectRoot}/tsconfig.json --env-file-if-exists={projectRoot}/.env {projectRoot}/src/seed.ts"
+        "command": "tsx --tsconfig {projectRoot}/tsconfig.json --env-file-if-exists=.env {projectRoot}/src/seed.ts"
       }
     },
     "dev:migrate": {
       "executor": "nx:run-commands",
       "options": {
         "command": "drizzle-kit push --config {projectRoot}/src/db/drizzle.config.ts",
-        "envFile": "{projectRoot}/.env"
+        "envFile": ".env"
       }
     },
     "db-generate": {

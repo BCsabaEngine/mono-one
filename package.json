@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t serve --parallel=4 --output-style=stream",
-    "env:init": "for f in apps/*/.env.example; do [ -e \"${f%.example}\" ] || cp \"$f\" \"${f%.example}\"; done",
+    "env:init": "[ -e .env ] || cp .env.example .env",
     "dev:infra": "docker compose -f docker-compose.dev.yml up -d --wait",
     "dev:migrate": "nx run-many -t dev:migrate --parallel=4 --output-style=static",
     "dev:seed": "nx run-many -t dev:seed --parallel=4 --output-style=static",

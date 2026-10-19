@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 import { baseEnvSchema, loadConfig } from './config'
+import { databaseUrlEnv } from './databaseUrl'
 import type { BaseEnv } from './config'
 import { createLogger, currentLog } from './logging'
 import type { Logger } from './logging'
@@ -81,7 +82,7 @@ export const withServiceDb = async <
 ) => {
   const config = loadConfig(baseEnvSchema, {
     SERVICE_ID: serviceId,
-    ...process.env
+    ...databaseUrlEnv(serviceId)
   })
 
   const log = createLogger({
