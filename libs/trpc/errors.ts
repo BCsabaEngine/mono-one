@@ -1,6 +1,7 @@
 import { TRPCClientError } from '@trpc/client'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { DomainError, notFound } from '../errors'
+import { runWithLog } from '../logging'
 import type { DomainErrorCode } from '../errors'
 import type { BaseContext } from './context'
 
@@ -30,13 +31,20 @@ export const toTRPCError = (err: unknown): TRPCError =>
 
 /** initTRPC + the single place where domain errors become TRPCErrors; unknown errors are logged and masked. */
 export const createTRPC = <Ctx extends BaseContext>() => {
-  const t = initTRPC.context<Ctx>().create()
+  const t = initTRPC.context<Ctx>().create({
+    // tRPC adds the stack (file paths) outside production; it stays in the server logs only
+    errorFormatter: ({ shape: { data, ...shape } }) => ({
+      ...shape,
+      data: { ...data, stack: undefined }
+    })
+  })
 
-  const procedure = t.procedure.use(async ({ ctx, path, next }) => {
+  const procedure = t.procedure.use(async ({ ctx, path, type, next }) => {
     const started = performance.now()
-    const result = await next()
+    const result = await runWithLog(ctx.log, next) // db lines of this call log with the same traceId
 
-    ctx.log.info(
+    // modifications are work (info), reads are debug
+    ctx.log[type === 'mutation' ? 'info' : 'debug'](
       {
         path,
         ok: result.ok,
@@ -50,13 +58,19 @@ export const createTRPC = <Ctx extends BaseContext>() => {
 
     const { cause } = result.error
 
-    if (
-      !(cause instanceof DomainError) &&
-      result.error.code === 'INTERNAL_SERVER_ERROR'
-    )
+    if (cause instanceof DomainError) throw toTRPCError(cause)
+
+    if (result.error.code === 'INTERNAL_SERVER_ERROR') {
       ctx.log.error({ err: cause ?? result.error, path }, 'unhandled error')
 
-    throw cause instanceof DomainError ? toTRPCError(cause) : result.error
+      // detail (SQL, params, stack) stays in the logs; the caller only gets the mask
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Internal error'
+      })
+    }
+
+    throw result.error
   })
 
   return { t, router: t.router, procedure, mergeRouters: t.mergeRouters }

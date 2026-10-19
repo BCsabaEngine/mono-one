@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { pushSchema } from 'drizzle-kit/api'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -204,5 +204,18 @@ describe('system-service (real Postgres)', () => {
     expect(
       await db.select().from(permission).where(eq(permission.userId, id))
     ).toEqual([])
+  })
+
+  it('masks unexpected errors: no SQL or parameters reach the caller', async () => {
+    const { db } = app.container.cradle.database
+    await db.execute(sql`drop table "user" cascade`) // last test: breaks every user query
+
+    const err = await client.users.auth
+      .mutate({ email: 'hello@mono.hu', password: 'hello' })
+      .catch(e => e)
+
+    expect(err.data.code).toBe('INTERNAL_SERVER_ERROR')
+    expect(err.message).toBe('Internal error')
+    expect(err.data.stack).toBeUndefined()
   })
 })

@@ -1,9 +1,31 @@
 import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
+import { createLogger, defineConfig } from 'vite'
 
-export default defineConfig({
+// dev server only (NODE_ENV defaults to development, like the services' pretty logs): show the percent-encoded query of SvelteKit's request lines decoded, e.g. the tRPC `input=%7B...%7D`
+const decodeQuery = (msg: string) =>
+	msg.replace(/(?:%[0-9A-Fa-f]{2})+/g, s => {
+		try {
+			return decodeURIComponent(s)
+		} catch {
+			return s
+		}
+	})
+
+const readableLogger = () => {
+	const logger = createLogger()
+
+	return {
+		...logger,
+		info: (msg, options) => logger.info(decodeQuery(msg), options),
+		error: (msg, options) => logger.error(decodeQuery(msg), options)
+	} satisfies typeof logger
+}
+
+export default defineConfig(({ command }) => ({
+	...(command === 'serve' &&
+		(process.env.NODE_ENV ?? 'development') === 'development' && { customLogger: readableLogger() }),
 	plugins: [
 		tailwindcss(), // build engine for flowbite-svelte only
 		sveltekit({
@@ -24,4 +46,4 @@ export default defineConfig({
 	ssr: { noExternal: ['svstate'] },
 	clearScreen: false, // keep the output of the other apps visible
 	server: { port: 3000 }
-})
+}))

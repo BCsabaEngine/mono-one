@@ -32,7 +32,8 @@ export const runService = <C extends CommonEnv>({
 
   const log = createLogger({
     service: config.SERVICE_ID,
-    level: config.LOG_LEVEL
+    level: config.LOG_LEVEL,
+    pretty: config.NODE_ENV === 'development'
   })
 
   log.info({ port: config.PORT }, 'starting')

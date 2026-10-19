@@ -3,7 +3,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 import { baseEnvSchema, loadConfig } from './config'
 import type { BaseEnv } from './config'
-import { createLogger } from './logging'
+import { createLogger, currentLog } from './logging'
 import type { Logger } from './logging'
 
 export type DbConfig = Pick<
@@ -38,13 +38,14 @@ export const createDb = <
     } finally {
       const ms = Math.round(performance.now() - start)
 
-      if (ms > config.DB_SLOW_QUERY_MS) log.warn({ ms }, 'slow query')
+      if (ms > config.DB_SLOW_QUERY_MS)
+        currentLog(log).warn({ ms }, 'slow query')
     }
   }) as typeof pool.query
 
   const db: NodePgDatabase<TSchema> = drizzle(pool, {
     ...(schema && { schema }),
-    logger: { logQuery: query => log.debug({ query }, 'sql') } // parameters deliberately not logged
+    logger: { logQuery: query => currentLog(log).trace({ query }, 'sql') } // parameters deliberately not logged
   })
 
   return {
@@ -83,7 +84,11 @@ export const withServiceDb = async <
     ...process.env
   })
 
-  const log = createLogger({ service: serviceId, level: config.LOG_LEVEL })
+  const log = createLogger({
+    service: serviceId,
+    level: config.LOG_LEVEL,
+    pretty: config.NODE_ENV === 'development'
+  })
   const database = createDb(config, log, schema)
 
   try {
