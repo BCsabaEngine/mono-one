@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { createRequire } from 'node:module'
+// aliased: the esbuild banner (nx.json) already declares `createRequire` at the top of every service bundle
+import { createRequire as makeRequire } from 'node:module'
 import { pino } from 'pino'
 import type { Logger } from 'pino'
 import { REDACTED } from './constants'
@@ -18,7 +19,7 @@ const SHORT_TRACE_ID_LENGTH = 8
 
 // loaded on demand (a devDependency, not part of the bundled images)
 const prettyStream = () =>
-  createRequire(import.meta.url)('pino-pretty').default({
+  makeRequire(import.meta.url)('pino-pretty').default({
     colorize: true,
     ignore: 'pid,hostname,time,service,version,userId',
     customPrettifiers: {

@@ -1,4 +1,4 @@
-# Local development stack. Build the bundles first: `pnpm nx run-many -t build`
+# Local development stack: `docker compose up -d --build` (each Dockerfile compiles its own bundle in a builder stage).
 # Only `web` is published to the host: the core services trust the JWT they receive, so they must stay on the private network.
 x-service-urls: &service-urls
   WEB_URL: http://web:3000
@@ -7,9 +7,13 @@ x-service-urls: &service-urls
   DOCUMENT_SERVICE_URL: http://document-service:3003
   SYSTEM_SERVICE_URL: http://system-service:3004
 
-x-db-service: &db-service
+# one-shot job on the Dockerfile's builder stage (has node_modules): drizzle-kit push, then wipe + seed the demo data
+x-db-init: &db-init
   depends_on:
     postgres: { condition: service_healthy }
+  restart: 'no'
+
+x-db-service: &db-service
   restart: unless-stopped
 
 services:
@@ -39,37 +43,73 @@ services:
         retries: 30
       }
 
+  customer-init:
+    <<: *db-init
+    build:
+      {
+        context: .,
+        dockerfile: apps/customer-service/Dockerfile,
+        target: builder
+      }
+    command: sh -c "touch .env && pnpm nx dev:migrate customer-service && pnpm nx dev:seed customer-service"
+    environment:
+      { DATABASE_URL: 'postgres://postgres:pg@postgres:5432/mono_customer' }
+
   customer-service:
     <<: *db-service
     build: { context: ., dockerfile: apps/customer-service/Dockerfile }
     environment:
       {
         <<: *service-urls,
-        DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_customer'
+        DATABASE_URL: 'postgres://postgres:pg@postgres:5432/mono_customer'
       }
+    depends_on:
+      customer-init: { condition: service_completed_successfully }
+  order-init:
+    <<: *db-init
+    build:
+      { context: ., dockerfile: apps/order-service/Dockerfile, target: builder }
+    command: sh -c "touch .env && pnpm nx dev:migrate order-service && pnpm nx dev:seed order-service"
+    environment:
+      { DATABASE_URL: 'postgres://postgres:pg@postgres:5432/mono_order' }
+
   order-service:
     <<: *db-service
     build: { context: ., dockerfile: apps/order-service/Dockerfile }
     environment:
       {
         <<: *service-urls,
-        DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_order'
+        DATABASE_URL: 'postgres://postgres:pg@postgres:5432/mono_order'
       }
+    depends_on:
+      order-init: { condition: service_completed_successfully }
   document-service: # no database
     build: { context: ., dockerfile: apps/document-service/Dockerfile }
     environment: *service-urls
     restart: unless-stopped
 
-  # no migrate jobs yet: no service has committed migrations during development (CLAUDE.md), so the tables
-  # come from `pnpm dev:migrate` (drizzle-kit push); generate migrations and add the jobs before deploying
+  system-init:
+    <<: *db-init
+    build:
+      {
+        context: .,
+        dockerfile: apps/system-service/Dockerfile,
+        target: builder
+      }
+    command: sh -c "touch .env && pnpm nx dev:migrate system-service && pnpm nx dev:seed system-service"
+    environment:
+      { DATABASE_URL: 'postgres://postgres:pg@postgres:5432/mono_system' }
+
   system-service:
     <<: *db-service
     build: { context: ., dockerfile: apps/system-service/Dockerfile }
     environment:
       {
         <<: *service-urls,
-        DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/mono_system'
+        DATABASE_URL: 'postgres://postgres:pg@postgres:5432/mono_system'
       }
+    depends_on:
+      system-init: { condition: service_completed_successfully }
 
   web: # must run as exactly one instance (events are fanned out in memory to connected browsers)
     build: { context: ., dockerfile: apps/web/Dockerfile }

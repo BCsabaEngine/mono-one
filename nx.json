@@ -100,9 +100,8 @@
     },
     "docker-build": {
       "executor": "nx:run-commands",
-      "dependsOn": ["build"],
       "options": {
-        "command": "docker build -f {projectRoot}/Dockerfile -t mono-one/{projectName}:latest ."
+        "command": "docker build --progress=plain -f {projectRoot}/Dockerfile -t mono-one/{projectName}:latest ."
       }
     },
     "dev:seed": {

@@ -21,6 +21,7 @@
     "test": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t test --output-style=stream",
     "test:force": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t test --output-style=stream --skip-nx-cache",
     "build": "nx run-many -t build",
+    "build:images": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t docker-build --output-style=stream",
     "all": "pnpm format && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {

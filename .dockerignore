@@ -1,2 +1,9 @@
-**
-!dist
+**/node_modules
+dist
+.git
+.nx
+**/.svelte-kit
+.env
+.env.*
+coverage
+docs

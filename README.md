@@ -50,4 +50,4 @@ Buttons follow the user's permissions (`customer.admin`, `order.place`, `documen
 
 ## Targets
 
-`lint`, `typecheck`, `test` (Testcontainers needs Docker), `build`, `docker-build`; services also `serve`, `dev:migrate`, `dev:seed` (customer, order, system), `db-generate` (only when migrations are re-introduced; no service has committed migrations now, the `dev:migrate` target runs `drizzle-kit push`).
+`lint`, `typecheck`, `test` (Testcontainers needs Docker), `build`, `docker-build` (compiles inside the image; `pnpm build:images` builds all five); services also `serve`, `dev:migrate`, `dev:seed` (customer, order, system), `db-generate` (only when migrations are re-introduced; no service has committed migrations now, the `dev:migrate` target runs `drizzle-kit push`).
