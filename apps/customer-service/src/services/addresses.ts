@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { notFound } from '@lib/errors'
 import type {
   AddAddressInput,
+  AddressBelongsInput,
   AddressesService,
   UpdateAddressInput
 } from '@api/customer'
@@ -20,6 +21,24 @@ export class AddressesServiceImpl implements AddressesService {
 
   private get db() {
     return this.database.db
+  }
+
+  async belongsTo({ customerId, addressId }: AddressBelongsInput) {
+    const [row] = await this.db
+      .select({ addressId: address.id })
+      .from(customer)
+      .leftJoin(
+        address,
+        and(
+          eq(address.id, addressId),
+          eq(address.customerId, customer.id),
+          isNull(address.deletedAt)
+        )
+      )
+      .where(and(eq(customer.id, customerId), isNull(customer.deletedAt)))
+    if (!row) throw notFound('Customer', String(customerId))
+
+    return { belongs: row.addressId !== null }
   }
 
   async add(input: AddAddressInput) {

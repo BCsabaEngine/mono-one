@@ -9,7 +9,13 @@ import type { Logger } from './logging'
 
 export type DbConfig = Pick<
   BaseEnv,
-  'DATABASE_URL' | 'DB_SCHEMA' | 'DB_POOL_SIZE' | 'DB_SLOW_QUERY_MS'
+  | 'DATABASE_URL'
+  | 'DB_SCHEMA'
+  | 'DB_POOL_SIZE'
+  | 'DB_SLOW_QUERY_MS'
+  | 'DB_CONNECTION_TIMEOUT_MS'
+  | 'DB_IDLE_TIMEOUT_MS'
+  | 'DB_STATEMENT_TIMEOUT_MS'
 >
 
 export const createDb = <
@@ -22,6 +28,9 @@ export const createDb = <
   const pool = new Pool({
     connectionString: config.DATABASE_URL,
     max: config.DB_POOL_SIZE,
+    connectionTimeoutMillis: config.DB_CONNECTION_TIMEOUT_MS,
+    idleTimeoutMillis: config.DB_IDLE_TIMEOUT_MS,
+    statement_timeout: config.DB_STATEMENT_TIMEOUT_MS,
     ...(config.DB_SCHEMA && { options: `-c search_path=${config.DB_SCHEMA}` })
   })
 
@@ -56,7 +65,16 @@ export const createDb = <
       fn: (
         tx: Parameters<Parameters<typeof db.transaction>[0]>[0]
       ) => Promise<T>
-    ) => db.transaction(fn),
+    ) => {
+      const start = performance.now()
+
+      return db.transaction(fn).finally(() => {
+        const ms = Math.round(performance.now() - start)
+
+        if (ms > config.DB_SLOW_QUERY_MS)
+          currentLog(log).warn({ ms }, 'slow transaction')
+      })
+    },
     ping: async () => void (await pool.query('select 1')),
     close: () => pool.end()
   }
@@ -65,11 +83,6 @@ export const createDb = <
 export type Db<
   TSchema extends Record<string, unknown> = Record<string, never>
 > = ReturnType<typeof createDb<TSchema>>
-
-/** What a query helper needs: the database itself or a transaction. */
-export type Executor<
-  TSchema extends Record<string, unknown> = Record<string, never>
-> = Pick<NodePgDatabase<TSchema>, 'select'>
 
 /** Config, logger and database of a service for a one-off script (migrate, seed); the pool is closed afterwards. */
 export const withServiceDb = async <

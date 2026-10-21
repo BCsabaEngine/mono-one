@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { callContextOf, createTRPC, requireIdentity } from '@lib/trpc'
+import {
+  callContextOf,
+  checkedOutsideProduction,
+  createTRPC,
+  requireIdentity
+} from '@lib/trpc'
 import type { BaseContext } from '@lib/trpc'
 import {
   addOrderDetailInput,
@@ -32,12 +37,12 @@ export const appRouter = router({
 
     get: authed
       .input(getOrderInput)
-      .output(orderSchema)
+      .output(checkedOutsideProduction(orderSchema))
       .query(({ input, ctx }) => ctx.services.orders.get(input.id)),
 
     list: authed
       .input(listOrdersInput)
-      .output(z.array(orderSchema))
+      .output(checkedOutsideProduction(z.array(orderSchema)))
       .query(({ input, ctx }) => ctx.services.orders.list(input)),
 
     delete: authed

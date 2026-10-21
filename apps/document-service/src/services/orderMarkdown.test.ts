@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Customer } from '@api/customer'
+import type { Address, CustomerSummary } from '@api/customer'
 import type { Order } from '@api/order'
 import { renderOrderMarkdown } from './orderMarkdown'
 
@@ -31,7 +31,7 @@ const makeOrder = (over: Partial<Order> = {}): Order => ({
   ...over
 })
 
-const address = (over: Partial<Customer['addresses'][number]> = {}) => ({
+const address = (over: Partial<Address> = {}) => ({
   id: 3,
   customerId: 7,
   type: 'hq' as const,
@@ -45,15 +45,13 @@ const address = (over: Partial<Customer['addresses'][number]> = {}) => ({
   ...over
 })
 
-const makeCustomer = (over: Partial<Customer> = {}): Customer => ({
+const makeCustomer = (
+  over: Partial<CustomerSummary> = {}
+): CustomerSummary => ({
   id: 7,
   code: 'C-0007',
   name: 'Test Customer',
-  comment: null,
-  addresses: [address()],
-  contacts: [],
-  ...stamps,
-  deletedAt: null,
+  address: address(),
   ...over
 })
 
@@ -172,13 +170,11 @@ describe('renderOrderMarkdown', () => {
 
     it('escapes the address parts', () => {
       const customer = makeCustomer({
-        addresses: [
-          address({
-            name: 'HQ | North',
-            address: 'Fo\nutca 1',
-            city: 'Buda  pest'
-          })
-        ]
+        address: address({
+          name: 'HQ | North',
+          address: 'Fo\nutca 1',
+          city: 'Buda  pest'
+        })
       })
 
       expect(render(makeOrder(), customer)).toContain(
@@ -197,7 +193,7 @@ describe('renderOrderMarkdown', () => {
   describe('delivery address', () => {
     it('puts the name first when there is one', () => {
       const customer = makeCustomer({
-        addresses: [address({ name: 'Warehouse' })]
+        address: address({ name: 'Warehouse' })
       })
 
       expect(render(makeOrder(), customer)).toContain(
@@ -206,7 +202,7 @@ describe('renderOrderMarkdown', () => {
     })
 
     it('leaves out a null or empty name', () => {
-      const empty = makeCustomer({ addresses: [address({ name: '' })] })
+      const empty = makeCustomer({ address: address({ name: '' }) })
 
       expect(render(makeOrder(), makeCustomer())).toContain(
         '\nFo utca 1, 1051 Budapest, HU\n'
@@ -216,19 +212,8 @@ describe('renderOrderMarkdown', () => {
       )
     })
 
-    it('picks the address of the order among several', () => {
-      const customer = makeCustomer({
-        addresses: [address({ id: 1, address: 'Other 9' }), address()]
-      })
-
-      const markdown = render(makeOrder(), customer)
-
-      expect(markdown).toContain('Fo utca 1')
-      expect(markdown).not.toContain('Other 9')
-    })
-
     it('says so when the address is gone', () => {
-      const customer = makeCustomer({ addresses: [address({ id: 99 })] })
+      const customer = makeCustomer({ address: null })
 
       expect(render(makeOrder(), customer)).toContain(
         '## Delivery address\n\nAddress 3 (no longer available)\n'
@@ -238,7 +223,7 @@ describe('renderOrderMarkdown', () => {
     // pinned as is: the customer service returns only active addresses, the renderer does not check deletedAt
     it('still renders an address that carries a deletedAt', () => {
       const customer = makeCustomer({
-        addresses: [address({ deletedAt: '2026-10-19T00:00:00.000Z' })]
+        address: address({ deletedAt: '2026-10-19T00:00:00.000Z' })
       })
 
       expect(render(makeOrder(), customer)).toContain(
@@ -267,13 +252,6 @@ describe('renderOrderMarkdown', () => {
   })
 
   describe('customer', () => {
-    // pinned as is: the caller (documents service) gets NOT_FOUND for a deleted customer from customer-service
-    it('does not look at deletedAt', () => {
-      const customer = makeCustomer({ deletedAt: '2026-10-19T00:00:00.000Z' })
-
-      expect(render(makeOrder(), customer)).toContain('Test Customer (C-0007)')
-    })
-
     it('ends the document with a newline', () => {
       expect(render().endsWith('\n')).toBe(true)
     })

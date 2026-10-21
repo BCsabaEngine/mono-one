@@ -58,8 +58,9 @@ export const createPublisher = <S extends ServiceId>({
       .get(target)!
 
   const failures = new Map<string, number>() // `${type}:${subscriber}` -> failed delivery count
+  const pending = new Set<Promise<unknown>>() // in-flight publishes, awaited by `drain` on shutdown
 
-  const publish = async <T extends EventsOwnedBy<S>>(
+  const send = async <T extends EventsOwnedBy<S>>(
     type: T,
     payload: EventOf<T>['payload'],
     opts: { traceId?: string; callChain?: string[]; userId?: string } = {}
@@ -129,7 +130,24 @@ export const createPublisher = <S extends ServiceId>({
     return result
   }
 
-  return { publish, failedDeliveries: () => Object.fromEntries(failures) }
+  const publish = <T extends EventsOwnedBy<S>>(
+    ...args: Parameters<typeof send<T>>
+  ) => {
+    const p = send<T>(...args)
+    const done = p.catch(() => undefined)
+
+    pending.add(done)
+    void done.finally(() => pending.delete(done))
+
+    return p
+  }
+
+  return {
+    publish,
+    /** Waits for in-flight publishes (they never reject here); call before the process exits. */
+    drain: async () => void (await Promise.all(pending)),
+    failedDeliveries: () => Object.fromEntries(failures)
+  }
 }
 
 type Handlers<S extends ServiceId> = {

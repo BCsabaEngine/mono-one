@@ -6,6 +6,9 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 5000
 const DEFAULT_EVENT_TIMEOUT_MS = 2500
 const DEFAULT_DB_POOL_SIZE = 10
 const DEFAULT_DB_SLOW_QUERY_MS = 500
+const DEFAULT_DB_CONNECTION_TIMEOUT_MS = 2000
+const DEFAULT_DB_IDLE_TIMEOUT_MS = 30000
+const DEFAULT_DB_STATEMENT_TIMEOUT_MS = 10000
 
 const positiveInt = (fallback: number) =>
   z.coerce.number().int().positive().default(fallback)
@@ -41,7 +44,10 @@ export const baseEnvSchema = commonEnvSchema.extend({
   DATABASE_URL: z.string().min(1),
   DB_SCHEMA: z.string().optional(),
   DB_POOL_SIZE: positiveInt(DEFAULT_DB_POOL_SIZE),
-  DB_SLOW_QUERY_MS: positiveInt(DEFAULT_DB_SLOW_QUERY_MS)
+  DB_SLOW_QUERY_MS: positiveInt(DEFAULT_DB_SLOW_QUERY_MS),
+  DB_CONNECTION_TIMEOUT_MS: positiveInt(DEFAULT_DB_CONNECTION_TIMEOUT_MS),
+  DB_IDLE_TIMEOUT_MS: positiveInt(DEFAULT_DB_IDLE_TIMEOUT_MS),
+  DB_STATEMENT_TIMEOUT_MS: positiveInt(DEFAULT_DB_STATEMENT_TIMEOUT_MS)
 })
 
 export type CommonEnv = z.infer<typeof commonEnvSchema>

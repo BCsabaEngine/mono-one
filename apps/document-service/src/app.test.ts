@@ -49,24 +49,18 @@ const customer = {
   id: 7,
   code: 'C-0007',
   name: 'Test Customer',
-  comment: null,
-  addresses: [
-    {
-      id: 3,
-      customerId: 7,
-      type: 'hq',
-      name: null,
-      country: 'HU',
-      zip: '1051',
-      city: 'Budapest',
-      address: 'Fo utca 1',
-      ...stamps,
-      deletedAt: null
-    }
-  ],
-  contacts: [],
-  ...stamps,
-  deletedAt: null
+  address: {
+    id: 3,
+    customerId: 7,
+    type: 'hq',
+    name: null,
+    country: 'HU',
+    zip: '1051',
+    city: 'Budapest',
+    address: 'Fo utca 1',
+    ...stamps,
+    deletedAt: null
+  }
 }
 
 const notFoundError = () =>
@@ -91,9 +85,15 @@ const orderClient = {
 
 const customerClient = {
   customers: {
-    get: {
-      query: async ({ id }: { id: number }) =>
-        id === customer.id ? customer : Promise.reject(notFoundError())
+    summary: {
+      query: async ({ id, addressId }: { id: number; addressId: number }) =>
+        id === customer.id
+          ? {
+              ...customer,
+              address:
+                addressId === customer.address.id ? customer.address : null
+            }
+          : Promise.reject(notFoundError())
     }
   }
 } as unknown as Dependencies['customerClient']

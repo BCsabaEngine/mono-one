@@ -1,5 +1,4 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm'
-import type { Executor } from '@lib/db'
+import { and, eq, inArray, isNull, notInArray } from 'drizzle-orm'
 import {
   conflict,
   isUniqueViolation,
@@ -18,12 +17,21 @@ import type {
 } from '@api/system'
 import type { Dependencies } from '../container'
 import { permission, user } from '../db/schema'
-import type * as schema from '../db/schema'
 import { hashPassword, verifyPassword } from './password'
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 const byPermissionOrder = (a: Permission, b: Permission) =>
   PERMISSIONS.indexOf(a) - PERMISSIONS.indexOf(b)
+
+/** The DTO of a user row: no password, permissions in `PERMISSIONS` order. */
+const toUser = (
+  { password: _password, ...u }: typeof user.$inferSelect,
+  permissions: Permission[]
+): User => ({
+  ...u,
+  permissions: [...permissions].sort(byPermissionOrder),
+  ...toStamps(u)
+})
 
 export class UsersServiceImpl implements UsersService {
   private readonly database: Dependencies['database']
@@ -39,32 +47,23 @@ export class UsersServiceImpl implements UsersService {
   }
 
   /** Users with their permissions in two queries (no N+1), in the order of `ids`; unknown ids are omitted. */
-  private async load(
-    ids: number[],
-    db: Executor<typeof schema> = this.db
-  ): Promise<User[]> {
+  private async load(ids: number[]): Promise<User[]> {
+    const { db } = this
     const [rows, perms] = await Promise.all([
       db.select().from(user).where(inArray(user.id, ids)),
       db.select().from(permission).where(inArray(permission.userId, ids))
     ])
 
-    const byId = new Map(
-      rows.map(({ password: _password, ...u }) => [
-        u.id,
-        { ...u, permissions: [] as Permission[] }
-      ])
+    const byUser = new Map<number, Permission[]>()
+    perms.forEach(p =>
+      byUser.set(p.userId, [...(byUser.get(p.userId) ?? []), p.name])
     )
-    perms.forEach(p => byId.get(p.userId)?.permissions.push(p.name))
 
-    return inIdOrder(ids, [...byId.values()]).map(u => ({
-      ...u,
-      permissions: u.permissions.sort(byPermissionOrder),
-      ...toStamps(u)
-    }))
+    return inIdOrder(ids, rows).map(u => toUser(u, byUser.get(u.id) ?? []))
   }
 
-  private async loadOne(id: number, db?: Executor<typeof schema>) {
-    const [found] = await this.load([id], db)
+  private async loadOne(id: number) {
+    const [found] = await this.load([id])
     if (!found) throw notFound('User', String(id))
 
     return found
@@ -76,18 +75,26 @@ export class UsersServiceImpl implements UsersService {
 
   async auth({ email, password }: AuthUserInput) {
     const [row] = await this.db
-      .select({ id: user.id, password: user.password })
+      .select()
       .from(user)
       .where(and(eq(user.email, normalizeEmail(email)), isNull(user.deletedAt)))
     if (!row || !verifyPassword(password, row.password))
       throw unauthorized('Invalid credentials')
 
-    return this.loadOne(row.id)
+    const perms = await this.db
+      .select({ name: permission.name })
+      .from(permission)
+      .where(eq(permission.userId, row.id))
+
+    return toUser(
+      row,
+      perms.map(p => p.name)
+    )
   }
 
   async add({ email, name, password, permissions }: AddUserInput) {
     try {
-      const id = await this.database.withTransaction(async tx => {
+      const added = await this.database.withTransaction(async tx => {
         const [row] = await tx
           .insert(user)
           .values({
@@ -95,71 +102,78 @@ export class UsersServiceImpl implements UsersService {
             name,
             password: hashPassword(password)
           })
-          .returning({ id: user.id })
+          .returning()
         if (!row) throw new Error('insert returned no row')
 
-        if (permissions.length)
+        const unique = [...new Set(permissions)]
+
+        if (unique.length)
           await tx
             .insert(permission)
-            .values(
-              [...new Set(permissions)].map(name => ({ userId: row.id, name }))
-            )
+            .values(unique.map(name => ({ userId: row.id, name })))
 
-        return row.id
+        return toUser(row, unique)
       })
 
-      this.log.info({ targetUserId: id }, 'user added')
-      return await this.loadOne(id)
+      this.log.info({ targetUserId: added.id }, 'user added')
+      return added
     } catch (err) {
       throw isUniqueViolation(err) ? conflict('Email already registered') : err
     }
   }
 
   async update({ id, name, permissions, password }: UpdateUserInput) {
-    return this.database.withTransaction(async tx => {
-      const [existing] = await tx
-        .select({ deletedAt: user.deletedAt })
-        .from(user)
-        .where(eq(user.id, id))
-        .for('update')
-      if (!existing || existing.deletedAt) throw notFound('User', String(id))
-
-      await tx
+    await this.database.withTransaction(async tx => {
+      const [row] = await tx
         .update(user)
         .set({
           updatedAt: new Date(), // also when only the permissions change
           ...(name && { name }),
           ...(password && { password: hashPassword(password) })
         })
-        .where(eq(user.id, id))
+        .where(and(eq(user.id, id), isNull(user.deletedAt)))
+        .returning({ id: user.id })
+      if (!row) throw notFound('User', String(id))
 
       if (permissions) {
-        await tx.delete(permission).where(eq(permission.userId, id))
+        const unique = [...new Set(permissions)]
 
-        if (permissions.length)
+        await tx
+          .delete(permission)
+          .where(
+            and(
+              eq(permission.userId, id),
+              unique.length ? notInArray(permission.name, unique) : undefined
+            )
+          )
+
+        if (unique.length)
           await tx
             .insert(permission)
-            .values(
-              [...new Set(permissions)].map(name => ({ userId: id, name }))
-            )
+            .values(unique.map(name => ({ userId: id, name })))
+            .onConflictDoNothing()
       }
-
-      this.log.info({ targetUserId: id }, 'user updated')
-      return this.loadOne(id, tx)
     })
+
+    this.log.info({ targetUserId: id }, 'user updated')
+    return this.loadOne(id)
   }
 
   async delete(id: number) {
-    const [existing] = await this.db
-      .select({ id: user.id })
-      .from(user)
-      .where(eq(user.id, id))
-    if (!existing) throw notFound('User', String(id))
-
-    await this.db
+    const [row] = await this.db
       .update(user)
       .set({ deletedAt: new Date() })
       .where(and(eq(user.id, id), isNull(user.deletedAt)))
+      .returning({ id: user.id })
+
+    if (!row) {
+      const [existing] = await this.db
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.id, id))
+
+      if (!existing) throw notFound('User', String(id)) // already deleted is fine (idempotent)
+    }
 
     this.log.info({ targetUserId: id }, 'user deleted')
     return { id }

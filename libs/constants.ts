@@ -41,6 +41,8 @@ export const CALL_CHAIN_HEADER = 'x-call-chain'
 export const SERVICE_ID_HEADER = 'x-service-id'
 export const AUTHORIZATION_HEADER = 'authorization'
 export const BEARER_PREFIX = /^Bearer\s+/i
+/** Decoded tokens kept in memory; the same token arrives on every call of a session, so decoding it once is enough. */
+export const MAX_DECODED_JWTS = 500
 
 // --- Trace id and call chain validation (incoming headers that do not match are replaced or dropped) ---
 
@@ -56,6 +58,16 @@ export const MAX_CALL_CHAIN = 16
 
 /** Replaces secrets in logs and in the logged config. */
 export const REDACTED = '[redacted]'
+
+// --- Streaming ---
+
+/** Keep-alive ping of SSE subscriptions, so proxies do not drop idle streams. */
+export const SSE_PING_MS = 15000
+
+// --- Shutdown ---
+
+/** After SIGTERM, in-flight requests get this long before their connections are closed. */
+export const SHUTDOWN_DRAIN_MS = 10000
 
 // --- Database ---
 

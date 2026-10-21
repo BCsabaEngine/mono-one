@@ -43,16 +43,18 @@ export class OrdersServiceImpl implements OrdersService {
     const { log, customerClient, publisher } = this
 
     // service-to-service call; the user's JWT is forwarded because customer-service authorizes on it
-    const customer = await customerClient.customers.get
-      .query({ id: fields.customerId }, { context: { ...caller } })
+    const { belongs } = await customerClient.addresses.belongsTo
+      .query(
+        {
+          customerId: fields.customerId,
+          addressId: fields.deliveryAddressId
+        },
+        { context: { ...caller } }
+      )
       .catch(notFoundOr('Customer', fields.customerId))
-    if (customer.deletedAt)
-      throw notFound('Customer', String(fields.customerId))
-
-    // customer.addresses holds the active addresses only
-    if (!customer.addresses.some(a => a.id === fields.deliveryAddressId))
+    if (!belongs)
       throw badRequest(
-        `Address ${fields.deliveryAddressId} is not an address of customer ${customer.id}`
+        `Address ${fields.deliveryAddressId} is not an address of customer ${fields.customerId}`
       )
 
     const { row, rows } = await this.database.withTransaction(async tx => {
@@ -79,36 +81,39 @@ export class OrdersServiceImpl implements OrdersService {
     }
 
     // after the commit, best effort; failures are logged by the publisher and never fail the request
-    void publisher.publish(
-      'order.placed',
-      {
-        orderId: created.id,
-        customerId: created.customerId,
-        totalCents: rows.reduce((sum, r) => sum + r.netValue, 0)
-      },
-      {
-        traceId: caller.traceId,
-        callChain: caller.callChain,
-        ...(caller.userId && { userId: caller.userId })
-      }
-    )
+    void Promise.resolve(
+      publisher.publish(
+        'order.placed',
+        {
+          orderId: created.id,
+          customerId: created.customerId,
+          totalCents: rows.reduce((sum, r) => sum + r.netValue, 0)
+        },
+        {
+          traceId: caller.traceId,
+          callChain: caller.callChain,
+          ...(caller.userId && { userId: caller.userId })
+        }
+      )
+    ).catch(err => log.error({ err }, 'order.placed publish failed'))
 
     log.info({ orderId: created.id }, 'order created')
     return created
   }
 
   async get(id: number): Promise<Order> {
-    const [row] = await this.db
-      .select()
-      .from(order)
-      .where(and(eq(order.id, id), isNull(order.deletedAt)))
+    const [[row], details] = await Promise.all([
+      this.db
+        .select()
+        .from(order)
+        .where(and(eq(order.id, id), isNull(order.deletedAt))),
+      this.db
+        .select()
+        .from(orderDetail)
+        .where(eq(orderDetail.orderId, id))
+        .orderBy(orderDetail.id)
+    ])
     if (!row) throw notFound('Order', String(id))
-
-    const details = await this.db
-      .select()
-      .from(orderDetail)
-      .where(eq(orderDetail.orderId, id))
-      .orderBy(orderDetail.id)
 
     return { ...row, ...toStamps(row), details: details.map(toDetail) }
   }
@@ -154,16 +159,20 @@ export class OrdersServiceImpl implements OrdersService {
   }
 
   async delete(id: number) {
-    const [existing] = await this.db
-      .select({ id: order.id })
-      .from(order)
-      .where(eq(order.id, id))
-    if (!existing) throw notFound('Order', String(id))
-
-    await this.db
+    const [row] = await this.db
       .update(order)
       .set({ deletedAt: new Date() })
       .where(and(eq(order.id, id), isNull(order.deletedAt)))
+      .returning({ id: order.id })
+
+    if (!row) {
+      const [existing] = await this.db
+        .select({ id: order.id })
+        .from(order)
+        .where(eq(order.id, id))
+
+      if (!existing) throw notFound('Order', String(id)) // already deleted is fine (idempotent)
+    }
 
     this.log.info({ orderId: id }, 'order deleted')
     return { id }

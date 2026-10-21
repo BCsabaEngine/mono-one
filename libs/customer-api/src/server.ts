@@ -1,13 +1,22 @@
 import { z } from 'zod'
-import { createTRPC, requireIdentity, requirePermission } from '@lib/trpc'
+import {
+  checkedOutsideProduction,
+  createTRPC,
+  requireIdentity,
+  requirePermission
+} from '@lib/trpc'
 import type { BaseContext } from '@lib/trpc'
 import {
   addAddressInput,
+  addressBelongsInput,
+  addressBelongsSchema,
   addContactInput,
   addCustomerInput,
   addressSchema,
   contactSchema,
   customerSchema,
+  customerSummaryInput,
+  customerSummarySchema,
   deleteInput,
   deletedSchema,
   getCustomerInput,
@@ -42,13 +51,18 @@ export const appRouter = router({
   customers: router({
     get: authed
       .input(getCustomerInput)
-      .output(customerSchema)
+      .output(checkedOutsideProduction(customerSchema))
       .query(({ input, ctx }) => ctx.services.customers.get(input.id)),
 
     list: authed
       .input(listCustomersInput)
-      .output(z.array(customerSchema))
+      .output(checkedOutsideProduction(z.array(customerSchema)))
       .query(({ input, ctx }) => ctx.services.customers.list(input.ids)),
+
+    summary: authed
+      .input(customerSummaryInput)
+      .output(customerSummarySchema)
+      .query(({ input, ctx }) => ctx.services.customers.summary(input)),
 
     add: admin
       .input(addCustomerInput)
@@ -67,6 +81,11 @@ export const appRouter = router({
   }),
 
   addresses: router({
+    belongsTo: authed
+      .input(addressBelongsInput)
+      .output(addressBelongsSchema)
+      .query(({ input, ctx }) => ctx.services.addresses.belongsTo(input)),
+
     add: admin
       .input(addAddressInput)
       .output(addressSchema)

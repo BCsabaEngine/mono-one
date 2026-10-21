@@ -41,7 +41,9 @@ export const buildContainer = (config: Config, log: Logger) =>
         log,
         timeoutMs: config.EVENT_TIMEOUT_MS
       })
-    ).singleton(),
+    )
+      .singleton()
+      .disposer(p => p.drain()),
     orders: asClass(OrdersServiceImpl).scoped(),
     orderDetails: asClass(OrderDetailsServiceImpl).scoped()
   })

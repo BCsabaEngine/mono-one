@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --froze
 
 COPY . .
 
-RUN pnpm nx build system-service
+RUN --mount=type=cache,target=/app/.nx/cache pnpm nx build system-service
 
 
 # ---- runner: the bundle only ----

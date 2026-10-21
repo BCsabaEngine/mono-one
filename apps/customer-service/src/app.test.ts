@@ -285,4 +285,94 @@ describe('customer-service (real Postgres)', () => {
       )
     ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } })
   })
+
+  it('summarizes a customer with the requested active address only, also for a deleted customer', async () => {
+    const [first] = await client.customers.list.query({ ids: [1] }, authed)
+    const addressId = first!.addresses[0]!.id
+
+    expect(
+      await client.customers.summary.query({ id: 1, addressId }, authed)
+    ).toMatchObject({
+      id: 1,
+      code: 'C-0001',
+      address: { id: addressId, customerId: 1 }
+    })
+
+    // an address of another customer is not the customer's
+    const other = (await client.customers.list.query({ ids: [2] }, authed))[0]!
+    expect(
+      (
+        await client.customers.summary.query(
+          { id: 1, addressId: other.addresses[0]!.id },
+          authed
+        )
+      ).address
+    ).toBeNull()
+
+    await expect(
+      client.customers.summary.query({ id: 999, addressId }, authed)
+    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } })
+
+    const { id } = await client.customers.add.mutate(
+      { code: 'SUM-1', name: 'Summed' },
+      admin
+    )
+    const added = await client.addresses.add.mutate(
+      { customerId: id, ...hq },
+      admin
+    )
+    await client.customers.delete.mutate({ id }, admin)
+
+    expect(
+      (
+        await client.customers.summary.query(
+          { id, addressId: added.id },
+          authed
+        )
+      ).address
+    ).toMatchObject({ id: added.id })
+
+    await client.addresses.delete.mutate({ id: added.id }, admin)
+    expect(
+      (
+        await client.customers.summary.query(
+          { id, addressId: added.id },
+          authed
+        )
+      ).address
+    ).toBeNull()
+  })
+
+  it('tells whether an address is an active address of an active customer', async () => {
+    const { id } = await client.customers.add.mutate(
+      { code: 'BEL-1', name: 'Belongs' },
+      admin
+    )
+    const added = await client.addresses.add.mutate(
+      { customerId: id, ...hq },
+      admin
+    )
+
+    const belongs = (customerId: number, addressId: number) =>
+      client.addresses.belongsTo.query({ customerId, addressId }, authed)
+
+    expect(await belongs(id, added.id)).toEqual({ belongs: true })
+    expect(await belongs(1, added.id)).toEqual({ belongs: false })
+    expect(await belongs(id, 99999)).toEqual({ belongs: false })
+
+    await expect(
+      client.addresses.belongsTo.query({ customerId: id, addressId: added.id })
+    ).rejects.toMatchObject({ data: { code: 'UNAUTHORIZED' } })
+
+    await client.addresses.delete.mutate({ id: added.id }, admin)
+    expect(await belongs(id, added.id)).toEqual({ belongs: false })
+
+    await client.customers.delete.mutate({ id }, admin)
+    await expect(belongs(id, added.id)).rejects.toMatchObject({
+      data: { code: 'NOT_FOUND' }
+    })
+    await expect(belongs(99999, 1)).rejects.toMatchObject({
+      data: { code: 'NOT_FOUND' }
+    })
+  })
 })

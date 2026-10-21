@@ -55,6 +55,18 @@ export type Customer = z.infer<typeof customerSchema>
 export const getCustomerInput = idInput
 export type GetCustomerInput = z.infer<typeof getCustomerInput>
 
+/** The few customer fields a document needs, with the one address asked for (null when it is not an active address of the customer). A soft-deleted customer is still summarized. */
+export const customerSummarySchema = z.object({
+  id,
+  code: z.string(),
+  name: z.string(),
+  address: addressSchema.nullable()
+})
+export type CustomerSummary = z.infer<typeof customerSummarySchema>
+
+export const customerSummaryInput = z.object({ id, addressId: id })
+export type CustomerSummaryInput = z.infer<typeof customerSummaryInput>
+
 export const listCustomersInput = idsInput
 export type ListCustomersInput = z.infer<typeof listCustomersInput>
 
@@ -78,6 +90,12 @@ const addressFields = {
 }
 export const addAddressInput = z.object({ customerId: id, ...addressFields })
 export type AddAddressInput = z.infer<typeof addAddressInput>
+
+export const addressBelongsInput = z.object({ customerId: id, addressId: id })
+export type AddressBelongsInput = z.infer<typeof addressBelongsInput>
+
+export const addressBelongsSchema = z.object({ belongs: z.boolean() })
+export type AddressBelongs = z.infer<typeof addressBelongsSchema>
 
 export const updateAddressInput = z
   .object({ id })
@@ -103,6 +121,8 @@ export interface CustomersService {
   get(id: number): Promise<Customer>
   /** Unknown ids are omitted; the result follows the order of `ids`. */
   list(ids: number[]): Promise<Customer[]>
+  /** One query: name, code and the requested address of the customer; NOT_FOUND when the customer does not exist. */
+  summary(input: CustomerSummaryInput): Promise<CustomerSummary>
   add(input: AddCustomerInput): Promise<Customer>
   update(input: UpdateCustomerInput): Promise<Customer>
   /** Soft delete of the customer only (its addresses and contacts stay as they are); idempotent. */
@@ -110,6 +130,8 @@ export interface CustomersService {
 }
 
 export interface AddressesService {
+  /** Whether `addressId` is an active address of `customerId`; NOT_FOUND when the customer is missing or soft-deleted. */
+  belongsTo(input: AddressBelongsInput): Promise<AddressBelongs>
   add(input: AddAddressInput): Promise<Address>
   update(input: UpdateAddressInput): Promise<Address>
   /** Soft delete; idempotent. */

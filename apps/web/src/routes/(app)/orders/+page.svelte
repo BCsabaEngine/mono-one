@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from 'flowbite-svelte'
 	import { FileLinesOutline, PlusOutline, TrashBinOutline } from 'flowbite-svelte-icons'
-	import { onMount } from 'svelte'
+	import { onMount, untrack } from 'svelte'
 	import { SvelteMap } from 'svelte/reactivity'
 	import type { Customer } from '@api/customer'
 	import type { Order } from '@api/order'
@@ -31,14 +31,15 @@
 	const canPlace = $derived(can(data.user, 'order.place'))
 	const canDocument = $derived(can(data.user, 'document.read'))
 
-	let orders = $state<Order[]>([])
-	let hasMore = $state(false)
-	let loading = $state(true)
+	// the server load delivers the first page and its customers; without it (services unreachable) the page loads in the browser
+	let orders = $state<Order[]>(untrack(() => data.initial?.orders ?? []))
+	let hasMore = $state(untrack(() => data.initial?.hasMore ?? false))
+	let loading = $state(untrack(() => !data.initial))
 	let error = $state('')
 
 	// active customers (for the new order form) plus whatever else the listed orders refer to, e.g. soft-deleted customers
 	let activeCustomers = $state<Customer[]>([])
-	const customers = new SvelteMap<number, Customer>()
+	const customers = new SvelteMap<number, Customer>(untrack(() => data.initial?.customers.map(c => [c.id, c] as const)))
 
 	let selected = $state<Order>()
 	let detailOpen = $state(false)
@@ -76,10 +77,13 @@
 		try {
 			const page = await trpc.orders.list.query({ limit: PAGE_SIZE, offset: append ? orders.length : 0 })
 
-			await rememberCustomers(page)
 			orders = append ? [...orders, ...page] : page
 			hasMore = page.length === PAGE_SIZE
+			loading = false
 			error = ''
+
+			// the labels fill in as the customers arrive (the map is reactive), the table does not wait for them
+			await rememberCustomers(page)
 		} catch (e) {
 			error = errorMessage(e)
 		} finally {
@@ -92,8 +96,15 @@
 		for (const customer of activeCustomers) customers.set(customer.id, customer)
 	}
 
+	// a fresh order replaces its row in the list, or becomes the first row when it is new; the list mirrors the server's newest-first order, so "load more" offsets stay right
+	const upsert = (order: Order) =>
+		(orders = orders.some(o => o.id === order.id)
+			? orders.map(o => (o.id === order.id ? order : o))
+			: [order, ...orders])
+
 	const loadSelected = async (id: number) => {
 		selected = await trpc.orders.get.query({ id })
+		upsert(selected)
 	}
 
 	const select = async (order: Order) => {
@@ -114,13 +125,23 @@
 	// lines added or deleted in the panel refresh both the panel and the list row
 	const reloadAfterChange = async () => {
 		if (selected) await loadSelected(selected.id)
-		await loadOrders()
 	}
 
 	const created = async (order: Order) => {
 		formOpen = false
 		notify(`Order #${order.id} placed`)
-		await loadOrders()
+		upsert(order)
+		await rememberCustomers([order])
+	}
+
+	// the order.placed event of any user: fetch only that order, unless it is in the list already (our own order arrives twice)
+	const placed = async (orderId: number) => {
+		if (orders.some(o => o.id === orderId)) return
+
+		const order = await trpc.orders.get.query({ id: orderId })
+
+		upsert(order)
+		await rememberCustomers([order])
 	}
 
 	const askDelete = (order: Order) => ((deleting = order), (deleteOpen = true))
@@ -131,19 +152,24 @@
 		await trpc.orders.delete.mutate({ id: deleting.id })
 		if (selected?.id === deleting.id) detailOpen = false
 
+		orders = orders.filter(o => o.id !== deleting?.id)
 		notify(`Order #${deleting.id} deleted`)
-		await loadOrders()
 	}
 
 	const showDocument = (order: Order) => ((documentOrderId = order.id), (documentOpen = true))
 
-	onMount(() => {
-		void loadOrders()
+	// the new order form needs the active customers; loaded when it opens, not with the page
+	const openForm = () => {
+		formOpen = true
 		void loadCustomers().catch(e => (error = errorMessage(e)))
+	}
+
+	onMount(() => {
+		if (!data.initial) void loadOrders()
 
 		// order-service announces new orders (also those of other users) through the web BFF
 		const subscription = trpc.live.orderPlaced.subscribe(undefined, {
-			onData: () => void loadOrders(),
+			onData: ({ orderId }) => void placed(orderId).catch(() => undefined),
 			onError: () => undefined
 		})
 
@@ -156,7 +182,7 @@
 <PageHeader title="Orders" subtitle="Newest first">
 	{#snippet actions()}
 		{#if canPlace}
-			<Button onclick={() => (formOpen = true)}><PlusOutline size="sm" class="me-1" />New order</Button>
+			<Button onclick={openForm}><PlusOutline size="sm" class="me-1" />New order</Button>
 		{/if}
 	{/snippet}
 </PageHeader>

@@ -30,8 +30,11 @@ export class DocumentsServiceImpl implements DocumentsService {
       .query({ id: orderId }, { context })
       .catch(notFoundOr('Order', orderId))
 
-    const customer = await this.customerClient.customers.get
-      .query({ id: order.customerId }, { context })
+    const customer = await this.customerClient.customers.summary
+      .query(
+        { id: order.customerId, addressId: order.deliveryAddressId },
+        { context }
+      )
       .catch(notFoundOr('Customer', order.customerId))
 
     this.log.info(

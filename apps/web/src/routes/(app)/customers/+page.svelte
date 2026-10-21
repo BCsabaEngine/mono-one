@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, Search } from 'flowbite-svelte'
 	import { EditOutline, PlusOutline, TrashBinOutline } from 'flowbite-svelte-icons'
-	import { onMount } from 'svelte'
+	import { onMount, untrack } from 'svelte'
 	import type { Customer } from '@api/customer'
 	import type { PageProps } from './$types'
 	import CustomerDetail from '#lib/components/customers/CustomerDetail.svelte'
@@ -24,8 +24,9 @@
 
 	const canEdit = $derived(can(data.user, 'customer.admin'))
 
-	let customers = $state<Customer[]>([])
-	let loading = $state(true)
+	// the server load delivers the first list; without it (services unreachable) the list loads in the browser
+	let customers = $state<Customer[]>(untrack(() => data.customers ?? []))
+	let loading = $state(untrack(() => !data.customers))
 	let error = $state('')
 	let search = $state('')
 
@@ -60,8 +61,12 @@
 		}
 	}
 
+	// the fresh customer also replaces its row in the list, so a change needs no reload of all customers
+	const patchRow = (customer: Customer) => (customers = customers.map(c => (c.id === customer.id ? customer : c)))
+
 	const loadSelected = async (id: number) => {
 		selected = await trpc.customers.get.query({ id })
+		patchRow(selected)
 	}
 
 	const select = async (customer: Customer) => {
@@ -84,7 +89,6 @@
 	// a change made in the detail panel (address, contact) refreshes both the panel and the list row
 	const reloadAfterChange = async () => {
 		if (selected) await loadSelected(selected.id)
-		await loadList()
 	}
 
 	const openForm = (customer?: Customer) => ((edited = customer), (formOpen = true))
@@ -96,7 +100,8 @@
 		notify(edited ? 'Customer saved' : 'Customer created')
 		if (edited && selected?.id === customer.id) selected = customer
 
-		await loadList()
+		if (edited) patchRow(customer)
+		else customers = [...customers, customer] // new ids are the highest, the list is in id order
 	}
 
 	const remove = async () => {
@@ -105,11 +110,13 @@
 		await trpc.customers.delete.mutate({ id: deleting.id })
 		if (selected?.id === deleting.id) detailOpen = false
 
+		customers = customers.filter(c => c.id !== deleting?.id)
 		notify(`Customer ${deleting.code} deleted`)
-		await loadList()
 	}
 
-	onMount(loadList)
+	onMount(() => {
+		if (!data.customers) void loadList()
+	})
 </script>
 
 <svelte:head><title>Customers · mono-one</title></svelte:head>

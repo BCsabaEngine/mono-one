@@ -18,5 +18,5 @@ export const orderDetail = pgTable(
     netValue: bigint('net_value', { mode: 'number' }).notNull(),
     ...businessTimestampColumns
   },
-  t => [index('order_detail_order_id_idx').on(t.orderId)]
+  t => [index('order_detail_order_id_id_idx').on(t.orderId, t.id)] // details of an order in id order; also serves the cascade by order_id
 )

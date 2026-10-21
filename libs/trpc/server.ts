@@ -2,7 +2,13 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { createHTTPHandler } from '@trpc/server/adapters/standalone'
 import type { AnyTRPCRouter, inferRouterContext } from '@trpc/server'
-import { EVENTS_PATH, HEALTH_PATH, READY_PATH, TRPC_PATH } from '../constants'
+import {
+  EVENTS_PATH,
+  HEALTH_PATH,
+  READY_PATH,
+  SHUTDOWN_DRAIN_MS,
+  TRPC_PATH
+} from '../constants'
 import type { Logger } from '../logging'
 import { baseContextFromHeaders } from './context'
 
@@ -26,6 +32,9 @@ export interface ServiceServerOptions<
   /** readiness probe, e.g. the database ping */
   ready: () => Promise<void>
 }
+
+/** Servers that received a shutdown signal: their readiness probe answers 503 so traffic moves away while they drain. */
+const draining = new WeakSet<Server>()
 
 const json = (res: ServerResponse, status: number, body: unknown) =>
   res
@@ -56,11 +65,13 @@ export const createServiceServer = <
       baseContextFromHeaders(req.headers, log, serviceId)
   })
 
-  return createServer((req, res) => {
+  const server: Server = createServer((req, res) => {
     const url = req.url ?? '/'
 
     if (url === HEALTH_PATH) return json(res, 200, { status: 'ok' })
-    if (url === READY_PATH)
+    if (url === READY_PATH) {
+      if (draining.has(server)) return json(res, 503, { status: 'draining' })
+
       return void ready().then(
         () => json(res, 200, { status: 'ready' }),
         err => (
@@ -68,12 +79,15 @@ export const createServiceServer = <
           json(res, 503, { status: 'unavailable' })
         )
       )
+    }
 
     if (url.startsWith(`${TRPC_PATH}/`)) return trpcHandler(req, res)
     if (url.startsWith(`${EVENTS_PATH}/`)) return eventsHandler(req, res)
 
     json(res, 404, { error: 'not found' })
   })
+
+  return server
 }
 
 /** SIGTERM/SIGINT: stop accepting connections, drain, then run cleanups (pg pool, container dispose). */
@@ -84,6 +98,7 @@ export const shutdownOnSignal = (
 ) => {
   const stop = (signal: string) => {
     log.info({ signal }, 'shutting down')
+    draining.add(server)
 
     server.close(() =>
       cleanup().then(
@@ -93,6 +108,7 @@ export const shutdownOnSignal = (
     )
 
     server.closeIdleConnections()
+    setTimeout(() => server.closeAllConnections(), SHUTDOWN_DRAIN_MS).unref()
   }
 
   process.once('SIGTERM', () => stop('SIGTERM'))

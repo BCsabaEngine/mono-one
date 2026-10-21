@@ -14,7 +14,8 @@
     "dev:seed": "nx run-many -t dev:seed --parallel=4 --output-style=static",
     "graph": "nx graph",
     "lint": "nx run-many -t lint -- --fix && eslint --fix libs/*.ts libs/trpc libs/migrations",
-    "lint:check": "nx run-many -t lint && eslint libs/*.ts libs/trpc libs/migrations",
+    "lint:libs": "eslint libs/*.ts libs/trpc libs/migrations",
+    "lint:check": "nx run-many -t lint && pnpm lint:libs",
     "format": "nx format:write",
     "format:check": "nx format:check",
     "typecheck": "nx run-many -t typecheck",
@@ -22,7 +23,7 @@
     "test:force": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t test --output-style=stream --skip-nx-cache",
     "build": "nx run-many -t build",
     "build:images": "NX_NATIVE_COMMAND_RUNNER=false nx run-many -t docker-build --output-style=stream",
-    "all": "pnpm format && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "all": "pnpm format && pnpm lint && NX_NATIVE_COMMAND_RUNNER=false nx run-many -t typecheck test build --output-style=stream"
   },
   "dependencies": {
     "@trpc/client": "11.19.0",

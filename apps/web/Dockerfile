@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --froze
 
 COPY . .
 
-RUN pnpm nx build web
+RUN --mount=type=cache,target=/app/.nx/cache pnpm nx build web
 
 
 # ---- runner: the bundle only ----

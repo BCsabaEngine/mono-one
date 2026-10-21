@@ -23,5 +23,5 @@ export const address = pgTable(
     address: text('address').notNull(),
     ...businessTimestampColumnsSoftDelete
   },
-  t => [index('address_customer_id_idx').on(t.customerId)]
+  t => [index('address_customer_id_id_idx').on(t.customerId, t.id)] // children of a customer in id order; also serves the cascade by customer_id
 )

@@ -1,3 +1,4 @@
+import { TRPCClientError } from '@trpc/client'
 import { eq } from 'drizzle-orm'
 import { pushSchema } from 'drizzle-kit/api'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -34,7 +35,18 @@ const published: unknown[][] = []
 
 // customer-service is faked at the client boundary; the real call is covered by its own contract/tests
 const customerClient = {
-  customers: { get: { query: async () => customer } }
+  addresses: {
+    belongsTo: {
+      query: async ({ addressId }: { addressId: number }) =>
+        customer.deletedAt
+          ? Promise.reject(
+              Object.assign(new TRPCClientError('not found'), {
+                data: { code: 'NOT_FOUND' }
+              })
+            )
+          : { belongs: customer.addresses.some(a => a.id === addressId) }
+    }
+  }
 } as unknown as Dependencies['customerClient']
 
 const publisher = {

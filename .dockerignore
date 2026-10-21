@@ -7,3 +7,9 @@ dist
 .env.*
 coverage
 docs
+CLAUDE.md
+README.md
+.github
+.claude
+docker
+docker-compose*.yml

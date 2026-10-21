@@ -7,6 +7,7 @@ import {
   CALL_CHAIN_ENTRY_PATTERN,
   CALL_CHAIN_HEADER,
   MAX_CALL_CHAIN,
+  MAX_DECODED_JWTS,
   SERVICE_ID_HEADER,
   TRACE_ID_HEADER,
   TRACE_ID_PATTERN
@@ -28,7 +29,9 @@ export const identitySchema = z.looseObject({
 })
 export type Identity = z.infer<typeof identitySchema>
 
-export const decodeJwt = (jwt: string): Identity | undefined => {
+const decoded = new Map<string, Identity | undefined>() // insertion order = age: the oldest entry goes first
+
+const parseJwt = (jwt: string): Identity | undefined => {
   try {
     const payload = JSON.parse(
       Buffer.from(jwt.split('.')[1] ?? '', 'base64url').toString()
@@ -38,6 +41,18 @@ export const decodeJwt = (jwt: string): Identity | undefined => {
   } catch {
     return undefined
   }
+}
+
+export const decodeJwt = (jwt: string): Identity | undefined => {
+  if (decoded.has(jwt)) return decoded.get(jwt)
+
+  const identity = parseJwt(jwt)
+
+  if (decoded.size >= MAX_DECODED_JWTS)
+    decoded.delete(decoded.keys().next().value!)
+
+  decoded.set(jwt, identity)
+  return identity
 }
 
 /** Unsigned JWT for the web login and tests; core services do not verify tokens (see CLAUDE.md "Auth"). */

@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server'
 import { describe, expect, it, vi } from 'vitest'
 import { silentLogger } from '@lib/testing'
 import type { CallContext } from '@lib/trpc'
-import type { Customer } from '@api/customer'
+import type { CustomerSummary } from '@api/customer'
 import type { Order } from '@api/order'
 import type { Dependencies } from '../container'
 import { DocumentsServiceImpl } from './documents'
@@ -35,28 +35,22 @@ const order: Order = {
   ...stamps
 }
 
-const customer: Customer = {
+const customer: CustomerSummary = {
   id: 7,
   code: 'C-0007',
   name: 'Test Customer',
-  comment: null,
-  addresses: [
-    {
-      id: 3,
-      customerId: 7,
-      type: 'hq',
-      name: null,
-      country: 'HU',
-      zip: '1051',
-      city: 'Budapest',
-      address: 'Fo utca 1',
-      ...stamps,
-      deletedAt: null
-    }
-  ],
-  contacts: [],
-  ...stamps,
-  deletedAt: null
+  address: {
+    id: 3,
+    customerId: 7,
+    type: 'hq',
+    name: null,
+    country: 'HU',
+    zip: '1051',
+    city: 'Budapest',
+    address: 'Fo utca 1',
+    ...stamps,
+    deletedAt: null
+  }
 }
 
 const caller: CallContext = {
@@ -76,14 +70,15 @@ const setup = () => {
     async (_input: { id: number }, _opts: unknown) => order
   )
   const customerGet = vi.fn(
-    async (_input: { id: number }, _opts: unknown) => customer
+    async (_input: { id: number; addressId: number }, _opts: unknown) =>
+      customer
   )
   const log = { ...silentLogger, info: vi.fn() }
 
   const service = new DocumentsServiceImpl({
     log,
     orderClient: { orders: { get: { query: orderGet } } },
-    customerClient: { customers: { get: { query: customerGet } } }
+    customerClient: { customers: { summary: { query: customerGet } } }
   } as unknown as Pick<Dependencies, 'log' | 'orderClient' | 'customerClient'>)
 
   return { service, orderGet, customerGet, log }
@@ -120,7 +115,10 @@ describe('DocumentsServiceImpl.generateOrderDocument', () => {
     expect(orderGet).toHaveBeenCalledOnce()
     expect(orderGet).toHaveBeenCalledWith({ id: 5 }, { context: caller })
     expect(customerGet).toHaveBeenCalledOnce()
-    expect(customerGet).toHaveBeenCalledWith({ id: 7 }, { context: caller })
+    expect(customerGet).toHaveBeenCalledWith(
+      { id: 7, addressId: 3 },
+      { context: caller }
+    )
     expect(orderGet.mock.invocationCallOrder[0]).toBeLessThan(
       customerGet.mock.invocationCallOrder[0]!
     )

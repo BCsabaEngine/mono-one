@@ -1,5 +1,6 @@
 import { TRPCClientError } from '@trpc/client'
 import { initTRPC, TRPCError } from '@trpc/server'
+import { SSE_PING_MS } from '../constants'
 import { DomainError, notFound } from '../errors'
 import { runWithLog } from '../logging'
 import type { DomainErrorCode } from '../errors'
@@ -32,6 +33,7 @@ export const toTRPCError = (err: unknown): TRPCError =>
 /** initTRPC + the single place where domain errors become TRPCErrors; unknown errors are logged and masked. */
 export const createTRPC = <Ctx extends BaseContext>() => {
   const t = initTRPC.context<Ctx>().create({
+    sse: { ping: { enabled: true, intervalMs: SSE_PING_MS } },
     // tRPC adds the stack (file paths) outside production; it stays in the server logs only
     errorFormatter: ({ shape: { data, ...shape } }) => ({
       ...shape,

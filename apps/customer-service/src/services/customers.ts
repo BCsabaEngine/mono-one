@@ -1,16 +1,15 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
-import type { Executor } from '@lib/db'
 import { conflict, isUniqueViolation, notFound } from '@lib/errors'
 import { inIdOrder, toStamps } from '@lib/stamps'
 import type {
   AddCustomerInput,
   Customer,
   CustomersService,
+  CustomerSummaryInput,
   UpdateCustomerInput
 } from '@api/customer'
 import type { Dependencies } from '../container'
 import { address, contact, customer } from '../db/schema'
-import type * as schema from '../db/schema'
 import { toAddress, toContact } from './mappers'
 
 const duplicateCode = (err: unknown): never => {
@@ -31,10 +30,8 @@ export class CustomersServiceImpl implements CustomersService {
   }
 
   /** Customers with their active addresses and contacts in three queries (no N+1), in the order of `ids`; unknown ids are omitted. */
-  private async load(
-    ids: number[],
-    db: Executor<typeof schema> = this.db
-  ): Promise<Customer[]> {
+  private async load(ids: number[]): Promise<Customer[]> {
+    const { db } = this
     const [rows, addresses, contacts] = await Promise.all([
       db.select().from(customer).where(inArray(customer.id, ids)),
       db
@@ -67,8 +64,8 @@ export class CustomersServiceImpl implements CustomersService {
     return inIdOrder(ids, [...byId.values()])
   }
 
-  private async loadOne(id: number, db?: Executor<typeof schema>) {
-    const [found] = await this.load([id], db)
+  private async loadOne(id: number) {
+    const [found] = await this.load([id])
     if (!found) throw notFound('Customer', String(id))
 
     return found
@@ -81,50 +78,68 @@ export class CustomersServiceImpl implements CustomersService {
 
   list = (ids: number[]) => this.load([...new Set(ids)])
 
+  async summary({ id, addressId }: CustomerSummaryInput) {
+    const [row] = await this.db
+      .select({
+        id: customer.id,
+        code: customer.code,
+        name: customer.name,
+        address
+      })
+      .from(customer)
+      .leftJoin(
+        address,
+        and(
+          eq(address.id, addressId),
+          eq(address.customerId, customer.id),
+          isNull(address.deletedAt)
+        )
+      )
+      .where(eq(customer.id, id))
+    if (!row) throw notFound('Customer', String(id))
+
+    return { ...row, address: row.address && toAddress(row.address) }
+  }
+
   async add({ code, name, comment }: AddCustomerInput) {
     const [row] = await this.db
       .insert(customer)
       .values({ code, name, comment })
-      .returning({ id: customer.id })
+      .returning()
       .catch(duplicateCode)
 
     this.log.info({ customerId: row!.id }, 'customer added')
-    return this.loadOne(row!.id)
+    return { ...row!, ...toStamps(row!), addresses: [], contacts: [] }
   }
 
   async update({ id, ...patch }: UpdateCustomerInput) {
-    return this.database
-      .withTransaction(async tx => {
-        const [existing] = await tx
-          .select({ deletedAt: customer.deletedAt })
-          .from(customer)
-          .where(eq(customer.id, id))
-          .for('update')
-        if (!existing || existing.deletedAt)
-          throw notFound('Customer', String(id))
-
-        await tx
-          .update(customer)
-          .set({ updatedAt: new Date(), ...patch })
-          .where(eq(customer.id, id))
-
-        this.log.info({ customerId: id }, 'customer updated')
-        return this.loadOne(id, tx)
-      })
+    const [row] = await this.db
+      .update(customer)
+      .set({ updatedAt: new Date(), ...patch })
+      .where(and(eq(customer.id, id), isNull(customer.deletedAt)))
+      .returning({ id: customer.id })
       .catch(duplicateCode)
+    if (!row) throw notFound('Customer', String(id))
+
+    this.log.info({ customerId: id }, 'customer updated')
+    return this.loadOne(id)
   }
 
   async delete(id: number) {
-    const [existing] = await this.db
-      .select({ id: customer.id })
-      .from(customer)
-      .where(eq(customer.id, id))
-    if (!existing) throw notFound('Customer', String(id))
-
-    await this.db
+    const [row] = await this.db
       .update(customer)
       .set({ deletedAt: new Date() })
       .where(and(eq(customer.id, id), isNull(customer.deletedAt)))
+      .returning({ id: customer.id })
+
+    if (!row) {
+      const [existing] = await this.db
+        .select({ id: customer.id })
+        .from(customer)
+        .where(eq(customer.id, id))
+
+      if (!existing) throw notFound('Customer', String(id)) // already deleted is fine (idempotent)
+    }
 
     this.log.info({ customerId: id }, 'customer deleted')
     return { id }

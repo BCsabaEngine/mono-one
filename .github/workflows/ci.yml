@@ -6,9 +6,15 @@ on:
 
 permissions: { contents: read }
 
+# a newer push to the same branch or PR makes the running check obsolete
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env: { COREPACK_ENABLE_DOWNLOAD_PROMPT: '0' }
     steps:
       - uses: actions/checkout@v7
@@ -34,7 +40,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm format:check
-      - run: pnpm lint:check
-      - run: pnpm nx run-many -t typecheck test build --output-style=stream
+      - run: pnpm nx run-many -t lint typecheck test build --output-style=stream
+      - run: pnpm lint:libs
       # - run: pnpm nx run-many -t docker-build
       # pushing images is added once a registry is chosen
