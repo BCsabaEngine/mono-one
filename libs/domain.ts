@@ -1,4 +1,4 @@
-// kept free of imports: the customer-service Drizzle schema loads this file by relative path (drizzle-kit ignores tsconfig paths)
+// kept free of imports: the Drizzle schemas load this file by relative path (drizzle-kit ignores tsconfig paths)
 /** Code-only lists, stored as text columns (no database enum types). */
 export const ADDRESS_TYPES = ['hq', 'site', 'mail'] as const
 export const CONTACT_TYPES = ['stock', 'management', 'sales'] as const

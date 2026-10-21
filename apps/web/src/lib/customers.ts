@@ -1,6 +1,6 @@
 // the path aliases only apply to .ts files (the tsconfig `include` does not cover .svelte), so components take these values from here;
-// `@domain/*` is the dependency-free lists file: `@api/customer` would pull the service router (and node:crypto) into the browser in dev
-export { ADDRESS_TYPES, CONTACT_TYPES, EU_COUNTRIES } from '@domain/customer'
+// `@lib/domain` is the dependency-free lists file: `@api/customer` would pull the service router (and node:crypto) into the browser in dev
+export { ADDRESS_TYPES, CONTACT_TYPES, EU_COUNTRIES } from '@lib/domain'
 import type { Address, Customer } from '@api/customer'
 import { trpc } from './trpc'
 

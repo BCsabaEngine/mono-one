@@ -1,8 +1,8 @@
 {
-  "name": "order-api",
+  "name": "document-api",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "library",
-  "sourceRoot": "libs/order-api/src",
-  "tags": ["type:api", "scope:order"],
+  "sourceRoot": "contracts/document-api/src",
+  "tags": ["type:api", "scope:document"],
   "targets": { "typecheck": {} }
 }

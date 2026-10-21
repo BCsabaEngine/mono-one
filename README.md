@@ -27,7 +27,7 @@ pnpm dev:seed    # optional: wipes customer + order + system data and inserts de
 pnpm dev         # serves web + the 4 services with reload
 ```
 
-Services restart on source changes (`tsx watch`, libs included); `web` uses Vite HMR. `web` is on http://localhost:3000, services on 3001-3004. To run a single app: `pnpm nx serve <app>`.
+Services restart on source changes (`tsx watch`, contracts and libs included); `web` uses Vite HMR. `web` is on http://localhost:3000, services on 3001-3004. To run a single app: `pnpm nx serve <app>`.
 
 ## Web UI
 

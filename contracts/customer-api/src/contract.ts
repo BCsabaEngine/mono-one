@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deletedSchema, id, idInput, idsInput, text } from '@lib/zod'
-import { ADDRESS_TYPES, CONTACT_TYPES, EU_COUNTRIES } from './domain'
+import { ADDRESS_TYPES, CONTACT_TYPES, EU_COUNTRIES } from '@lib/domain'
 
 export { ADDRESS_TYPES, CONTACT_TYPES, EU_COUNTRIES }
 

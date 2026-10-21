@@ -1,8 +1,8 @@
 {
-  "name": "customer-api",
+  "name": "events",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "library",
-  "sourceRoot": "libs/customer-api/src",
-  "tags": ["type:api", "scope:customer"],
+  "sourceRoot": "contracts/events/src",
+  "tags": ["type:events", "scope:events"],
   "targets": { "typecheck": {} }
 }

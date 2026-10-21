@@ -2,9 +2,8 @@
   "compilerOptions": {
     "paths": {
       "@lib/*": ["./libs/*"],
-      "@api/*": ["./libs/*-api/src/index.ts"],
-      "@domain/*": ["./libs/*-api/src/domain.ts"],
-      "@events/*": ["./libs/events/src/*.ts"]
+      "@api/*": ["./contracts/*-api/src/index.ts"],
+      "@events/*": ["./contracts/events/src/*.ts"]
     },
     "target": "es2023",
     "lib": ["es2023"],

@@ -1,6 +1,6 @@
 import { index, integer, pgTable, text } from 'drizzle-orm/pg-core'
 // eslint-disable-next-line @nx/enforce-module-boundaries -- drizzle-kit loads the schema without tsconfig paths, so no alias
-import { CONTACT_TYPES } from '../../../../../libs/customer-api/src/domain'
+import { CONTACT_TYPES } from '../../../../../libs/domain'
 import { customer } from './customer'
 // eslint-disable-next-line @nx/enforce-module-boundaries -- drizzle-kit loads the schema without tsconfig paths, so no alias
 import { businessTimestampColumnsSoftDelete } from '../../../../../libs/businessColumns'
