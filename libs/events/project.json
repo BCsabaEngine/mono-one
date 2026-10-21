@@ -2,7 +2,7 @@
   "name": "events",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "library",
-  "sourceRoot": "libs/events",
+  "sourceRoot": "libs/events/src",
   "tags": ["type:events", "scope:events"],
   "targets": { "typecheck": {} }
 }

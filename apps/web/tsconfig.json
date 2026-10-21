@@ -6,7 +6,7 @@
 			"@lib/*": ["../../libs/*"],
 			"@api/*": ["../../libs/*-api/src/index.ts"],
 			"@domain/*": ["../../libs/*-api/src/domain.ts"],
-			"@events/*": ["../../libs/events/*.ts"]
+			"@events/*": ["../../libs/events/src/*.ts"]
 		}
 	},
 	"include": ["src", "vite.config.ts"]

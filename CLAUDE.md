@@ -75,7 +75,7 @@ apps/web  apps/customer-service  apps/order-service  apps/document-service  apps
 libs/
   customer-api  order-api  document-api  system-api                  contract.ts (Zod schemas, DTOs, service "port" interfaces) + server.ts (tRPC router, AppRouter type)
   config.ts logging.ts errors.ts db.ts seedIds.ts seeding.ts testing.ts  trpc/ migrations/   shared helpers, imported as @lib/<name>; not an Nx project
-  events/   one Nx project, imported as @events/<file>: contract.ts (defineEvent, envelope, ServiceId, EventsRouter) registry.ts (EVENTS map) client.ts (publisher, events router) + one file per owning service (order.ts)
+  events/src/   one Nx project, imported as @events/<file>: contract.ts (defineEvent, envelope, ServiceId, EventsRouter) registry.ts (EVENTS map) client.ts (publisher, events router) + one file per owning service (order.ts)
 ```
 
 - Libs are source-consumed (not buildable); path mappings live in `tsconfig.base.json`; `apps/web/tsconfig.json` repeats them (relative to itself) because it extends `$app/tsconfig`, not the base, so a new alias goes into both files. No `baseUrl` (deprecated in TS 6); entries start with `./`. `@domain/*` maps to `libs/*-api/src/domain.ts`, the dependency-free code-only lists (only `customer-api` has one): the browser takes `ADDRESS_TYPES` etc. from there, because `@api/<svc>` also re-exports the service router (and `node:crypto`), which breaks the dev client.
@@ -157,12 +157,12 @@ apps/<svc>/src/  main.ts (start + shutdown)  app.ts (createApp: container + serv
 
 ## Events (no bus, no persistence, no retry)
 
-- Each event type has exactly one owning service: it defines the schema in its own file in `libs/events` (e.g. `order.ts`, `defineEvent`; CODEOWNERS gives that file to the owning team), is the only sender, and never subscribes to its own events. `@events/registry` holds the `EVENTS` map (owner, schema, subscribers) and the derived types `EventsOwnedBy<S>` / `EventsFor<S>`; a type check fails if an owner subscribes to itself. Current event: `order.placed` (owner `order-service`; subscriber `web`). `system-service` and `document-service` are known `ServiceId`s but own and subscribe to nothing.
+- Each event type has exactly one owning service: it defines the schema in its own file in `libs/events/src` (e.g. `order.ts`, `defineEvent`; CODEOWNERS gives that file to the owning team), is the only sender, and never subscribes to its own events. `@events/registry` holds the `EVENTS` map (owner, schema, subscribers) and the derived types `EventsOwnedBy<S>` / `EventsFor<S>`; a type check fails if an owner subscribes to itself. Current event: `order.placed` (owner `order-service`; subscriber `web`). `system-service` and `document-service` are known `ServiceId`s but own and subscribe to nothing.
 - `createPublisher(serviceId)` accepts only events the service owns (compile error otherwise), validates against the owner's schema, then calls every subscriber's `events.deliver` instantly and in parallel with a short timeout. It returns `{ delivered, failed }` and logs failures; counters via `failedDeliveries()`.
 - `createEventsRouter(serviceId, handlers)` mounts `events.deliver` on `/events`. The handler map is typed from the registry (exactly the subscribed events), every event is validated against the owner's schema, and `x-service-id` must equal the registered owner (a consistency check, not security).
 - Guarantees: best effort, at most once, unordered. Events are signals; the owner's database is the source of truth. Publish after the DB commit. Anything that must not be lost is a direct tRPC call whose result the caller checks. Avoid event cycles.
 - `web` owns no events. Its handler emits to an in-memory bus that feeds the SSE subscription, so `web` must run as exactly one instance.
-- To add an event: schema in the owner's file `libs/events/<svc>.ts` (add a CODEOWNERS entry if the service has none), register it in `@events/registry`, add handlers in each subscriber's `createEventsRouter`, publish from the owner after commit.
+- To add an event: schema in the owner's file `libs/events/src/<svc>.ts` (add a CODEOWNERS entry if the service has none), register it in `@events/registry`, add handlers in each subscriber's `createEventsRouter`, publish from the owner after commit.
 
 ## Auth
 

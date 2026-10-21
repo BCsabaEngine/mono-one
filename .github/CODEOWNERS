@@ -1,3 +1,3 @@
 # Each event file is owned by the service that owns (and is the only sender of) those events.
 /libs/events/  @mono-one/platform-team
-/libs/events/order.ts  @mono-one/order-service-team
+/libs/events/src/order.ts  @mono-one/order-service-team
