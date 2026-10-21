@@ -4,3 +4,8 @@ allowBuilds:
   nx: true
   protobufjs: false
   ssh2: false
+permissions:
+  '@trpc/client':
+    skills: false
+  '@trpc/server':
+    skills: false

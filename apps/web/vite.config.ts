@@ -39,8 +39,13 @@ export default defineConfig(({ command }) => ({
 	resolve: { tsconfigPaths: true },
 	build: {
 		sourcemap: false, // SvelteKit defaults the server build to true; no .map files in dist
-		// `@api/<svc>` also exports the owning service's router; web only needs the contract, so drop the router modules from the bundle
-		rolldownOptions: { treeshake: { moduleSideEffects: id => !/contracts\/[^/]+-api\/src\/server\.ts$/.test(id) } }
+		// `@api/<svc>` also exports the owning service's router, and `@lib/trpc` re-exports `libs/db.ts`; web only needs the contracts and no database, so drop the router modules and the unused `pg` driver from the bundle
+		rolldownOptions: {
+			treeshake: {
+				moduleSideEffects: id =>
+					!/contracts\/[^/]+-api\/src\/server\.ts$|node_modules\/\.pnpm\/pg(?:-[\w-]+)?@/.test(id)
+			}
+		}
 	},
 	// svstate's dist uses extensionless relative imports, which Node's native ESM loader rejects in dev SSR; let Vite resolve them
 	ssr: { noExternal: ['svstate'] },
